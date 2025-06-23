@@ -50,7 +50,7 @@ export async function signup(req, res) {
     res.cookie("jwtToken", jwtToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "Lax",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days in ms
     });
