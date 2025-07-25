@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@reduxjs/toolkit": "^2.8.2",
     "bcrypt": "^6.0.0",
     "body": "^5.1.0",
     "cookie": "^1.0.2",
@@ -24,6 +25,8 @@
     "nodemailer": "^7.0.3",
     "parser": "^0.1.4",
     "pg": "^8.15.6",
+    "react-redux": "^9.2.0",
+    "redux-persist": "^6.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
