@@ -5,6 +5,11 @@ import pool from '../db/db.js';
 export async function signup(req, res) {
   const { email, fullName, password } = req.body;
   console.log('manual signup logic:', email, fullName, password);
+  console.log('Database connection:', {
+    host: process.env.PGHOST,
+    database: process.env.PGDATABASE,
+    user: process.env.PGUSER
+  });
 
   if (!email || !fullName || !password) {
     return res.status(400).json({ error: "All fields are required." });
