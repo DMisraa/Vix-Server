@@ -34,11 +34,34 @@ export async function getUserEvents(req, res) {
       }
     }
 
-    // Attach contactIds to each event
-    const enrichedEvents = events.map((event) => ({
-      ...event,
-      contactIds: contactsMap[event.id] || [],
-    }));
+    // Attach contactIds to each event and map fields to expected format
+    const enrichedEvents = events.map((event) => {
+      // Determine the display name based on event type
+      let displayName;
+      if (event.event_type === 'other' && event.event_name) {
+        displayName = event.event_name;
+      } else {
+        displayName = event.event_name || event.name || 'Event';
+      }
+      
+      return {
+        id: event.id,
+        name: displayName,
+        eventType: event.event_type,
+        event_date: event.event_date,
+        venue_name: event.venue_name || "", // This might be null if column doesn't exist
+        venue_address: event.location || "", // Map location to venue_address
+        groom_name: event.celebrator1_name, // Map celebrator1_name to groom_name
+        bride_name: event.celebrator2_name, // Map celebrator2_name to bride_name
+        bar_mitzvah_boy_name: event.celebrator1_name, // Map for bar mitzvah
+        bat_mitzvah_girl_name: event.celebrator1_name, // Map for bat mitzvah
+        brit_milah_boy_name: event.celebrator1_name, // Map for brit mitzvah
+        event_name: event.event_name,
+        imageUrl: event.image_url,
+        owner_email: event.owner_email,
+        contactIds: contactsMap[event.id] || [],
+      };
+    });
 
     res.status(200).json({ events: enrichedEvents });
   } catch (err) {

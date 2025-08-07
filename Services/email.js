@@ -1,10 +1,11 @@
 import nodemailer from 'nodemailer'
 
 export default async function sendEmail(req, res) {
-  const { userEmail, guestEmail } = req.body;
+  const { userEmail, guestEmail, token } = req.body;
   console.log('email:', userEmail)
 
   if (!guestEmail) return res.status(400).json({ error: 'Email is required' });
+  if (!token) return res.status(400).json({ error: 'Token is required' });
 
   // Create transporter (using Gmail)
   const transporter = nodemailer.createTransport({
@@ -15,16 +16,15 @@ export default async function sendEmail(req, res) {
     },
   });
 
-  // Build your HTML email content
-const html = `
-  <div style="font-family: Arial; line-height: 1.5;">
-    <h2>הזמנה לשליחת אנשי קשר</h2>
-    <p>היי! הוזמנת לשלוח אנשי קשר מהנייד או מהאקסל על ידי ("שם המבקש").</p>
-    <p>להעלאת אנשי קשר, לחץ על הקישור הבא:</p>
-    <a href="${process.env.BASE_URL}/contacts?invitedBy=${userEmail}" target="_blank">פתח הזמנה</a>
-  </div>
-`;
-
+  // Build HTML email with JWT token
+  const html = `
+    <div style="font-family: Arial; line-height: 1.5;">
+      <h2>הזמנה לשליחת אנשי קשר</h2>
+      <p>היי! הוזמנת לשלוח אנשי קשר מהנייד או מהאקסל על ידי ("שם המבקש").</p>
+      <p>להעלאת אנשי קשר, לחץ על הקישור הבא:</p>
+      <a href="${process.env.BASE_URL}/guest-upload?token=${token}" target="_blank">פתח הזמנה</a>
+    </div>
+  `;
 
   try {
     await transporter.sendMail({
