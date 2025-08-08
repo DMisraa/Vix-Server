@@ -2,6 +2,8 @@ import express from "express";
 import multer from "multer";
 import cors from "cors";
 import pool from "./db/db.js";
+import jwt from "jsonwebtoken";
+import cookieParser from "cookie-parser";
 
 import sendEmail from "./Services/email.js";
 import { extractExcelData } from "./Services/extractExcelContacts.js";
@@ -65,6 +67,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "10mb" }));  // Increase JSON payload size
 app.use(express.urlencoded({ limit: "10mb", extended: true })); 
+app.use(cookieParser()); // Add cookie-parser middleware
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -76,6 +79,29 @@ app.get('/health', async (req, res) => {
   } catch (error) {
     console.error('Health check failed:', error);
     res.status(500).json({ status: 'unhealthy', error: error.message });
+  }
+});
+
+// JWT verification endpoint
+app.get('/api/verify-jwt', (req, res) => {
+  console.log('=== JWT VERIFICATION REQUEST ===');
+  console.log('Cookies:', req.cookies);
+  
+  const jwtToken = req.cookies?.jwtToken;
+  
+  if (!jwtToken) {
+    console.log('No JWT token found in cookies');
+    return res.status(401).json({ message: "No token provided" });
+  }
+  
+  try {
+    console.log('Verifying JWT token...');
+    const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
+    console.log('JWT verified successfully:', decoded);
+    res.json({ user: decoded });
+  } catch (error) {
+    console.error('JWT verification failed:', error);
+    res.status(401).json({ message: "Invalid token" });
   }
 });
 
