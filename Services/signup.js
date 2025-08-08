@@ -8,7 +8,8 @@ export async function signup(req, res) {
   console.log('Database connection:', {
     host: process.env.PGHOST,
     database: process.env.PGDATABASE,
-    user: process.env.PGUSER
+    user: process.env.PGUSER,
+    databaseURL: process.env.DATABASE_URL,
   });
 
   if (!email || !fullName || !password) {
