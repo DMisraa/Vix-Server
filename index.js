@@ -40,7 +40,26 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: [ process.env.BASE_URL, process.env.PRODUCTION_URL ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      process.env.BASE_URL,
+      process.env.PRODUCTION_URL,
+      'https://vix-zeta.vercel.app',
+      'http://localhost:3000' // for development
+    ].filter(Boolean); // Remove undefined values
+    
+    console.log('CORS check - Origin:', origin, 'Allowed origins:', allowedOrigins);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('Blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
   credentials: true
 }));
@@ -58,6 +77,13 @@ app.get('/health', async (req, res) => {
     console.error('Health check failed:', error);
     res.status(500).json({ status: 'unhealthy', error: error.message });
   }
+});
+
+// Simple test endpoint (no database)
+app.post('/test', (req, res) => {
+  console.log('=== TEST ENDPOINT ===');
+  console.log('Request body:', req.body);
+  res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
 });
 
 app.get('/api/user-events', getUserEvents)
