@@ -80,8 +80,13 @@ app.get('/health', async (req, res) => {
 });
 
 // Simple test endpoint (no database)
+app.get('/test', (req, res) => {
+  console.log('=== TEST ENDPOINT (GET) ===');
+  res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
+});
+
 app.post('/test', (req, res) => {
-  console.log('=== TEST ENDPOINT ===');
+  console.log('=== TEST ENDPOINT (POST) ===');
   console.log('Request body:', req.body);
   res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
 });
