@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import cors from "cors";
+import pool from "./db/db.js";
 
 import sendEmail from "./Services/email.js";
 import { extractExcelData } from "./Services/extractExcelContacts.js";
@@ -32,6 +33,12 @@ const port = 4000
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
+// Simple request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
 app.use(cors({
   origin: [ process.env.BASE_URL, process.env.PRODUCTION_URL ],
   methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
@@ -39,6 +46,19 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "10mb" }));  // Increase JSON payload size
 app.use(express.urlencoded({ limit: "10mb", extended: true })); 
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({ status: 'unhealthy', error: error.message });
+  }
+});
 
 app.get('/api/user-events', getUserEvents)
 
