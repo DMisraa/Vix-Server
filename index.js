@@ -1,8 +1,6 @@
 import express from "express";
 import multer from "multer";
 import cors from "cors";
-import pool from "./db/db.js";
-import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 
 import sendEmail from "./Services/email.js";
@@ -31,9 +29,20 @@ import { deleteGuestUpload } from "./Services/database/deleteGuestUpload.js";
 import { getGuestUploads } from "./Services/database/getGuestUploads.js";
 import { getGuestUploadContacts } from "./Services/database/getGuestUploadContacts.js";
 
+// Import extracted endpoint functions
+import { verifyJwt } from "./Services/auth/verifyJwt.js";
+import { validateInvitation } from "./Services/auth/validateInvitation.js";
+import { createInvitation } from "./Services/auth/createInvitation.js";
+import { logout } from "./Services/auth/logout.js";
+import { googleContacts } from "./Services/contacts/googleContacts.js";
+import { googleContactsFetch } from "./Services/contacts/googleContactsFetch.js";
+import { excelContacts } from "./Services/contacts/excelContacts.js";
+import { appleContacts } from "./Services/contacts/appleContacts.js";
+import { healthCheck } from "./Services/health.js";
+
 const port = 4000
 const app = express();
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Simple request logging
 app.use((req, res, next) => {
@@ -42,26 +51,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      process.env.BASE_URL,
-      process.env.PRODUCTION_URL,
-      'https://vix-zeta.vercel.app',
-      'http://localhost:3000' // for development
-    ].filter(Boolean); // Remove undefined values
-    
-    console.log('CORS check - Origin:', origin, 'Allowed origins:', allowedOrigins);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('Blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: [ process.env.BASE_URL, process.env.PRODUCTION_URL ],
   methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
   credentials: true
 }));
@@ -70,52 +60,31 @@ app.use(express.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser()); // Add cookie-parser middleware
 
 // Health check endpoint
-app.get('/health', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    await client.query('SELECT 1');
-    client.release();
-    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
-  } catch (error) {
-    console.error('Health check failed:', error);
-    res.status(500).json({ status: 'unhealthy', error: error.message });
-  }
-});
+app.get('/health', healthCheck);
 
 // JWT verification endpoint
-app.get('/api/verify-jwt', (req, res) => {
-  console.log('=== JWT VERIFICATION REQUEST ===');
-  console.log('Cookies:', req.cookies);
-  
-  const jwtToken = req.cookies?.jwtToken;
-  
-  if (!jwtToken) {
-    console.log('No JWT token found in cookies');
-    return res.status(401).json({ message: "No token provided" });
-  }
-  
-  try {
-    console.log('Verifying JWT token...');
-    const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
-    console.log('JWT verified successfully:', decoded);
-    res.json({ user: decoded });
-  } catch (error) {
-    console.error('JWT verification failed:', error);
-    res.status(401).json({ message: "Invalid token" });
-  }
-});
+app.get('/api/verify-jwt', verifyJwt);
 
-// Simple test endpoint (no database)
-app.get('/test', (req, res) => {
-  console.log('=== TEST ENDPOINT (GET) ===');
-  res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
-});
+// Validate invitation endpoint
+app.post('/api/validate-invitation', validateInvitation);
 
-app.post('/test', (req, res) => {
-  console.log('=== TEST ENDPOINT (POST) ===');
-  console.log('Request body:', req.body);
-  res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
-});
+// Create invitation endpoint
+app.post('/api/create-invitation', createInvitation);
+
+// Google contacts endpoint
+app.get('/api/google-contacts', googleContacts);
+
+// Google contacts fetch endpoint
+app.post('/api/google-contacts/fetch', googleContactsFetch);
+
+// Excel contacts endpoint
+app.post('/api/excel-contacts', upload.single('file'), excelContacts);
+
+// Apple contacts endpoint
+app.post('/api/apple-contacts', upload.single('file'), appleContacts);
+
+// Logout endpoint
+app.get('/api/logout', logout);
 
 app.get('/api/user-events', getUserEvents)
 

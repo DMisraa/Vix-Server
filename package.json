@@ -31,6 +31,7 @@
     "pg": "^8.15.6",
     "react-redux": "^9.2.0",
     "redux-persist": "^6.0.0",
+    "vcard-parser": "^1.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

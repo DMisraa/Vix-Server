@@ -3,11 +3,7 @@ import bcrypt from 'bcrypt';
 import pool from '../db/db.js';
 
 export async function signup(req, res) {
-  console.log('=== SIGNUP REQUEST START ===');
-  console.log('Environment:', process.env.NODE_ENV);
-  console.log('Request body:', req.body);
   
-  const { email, fullName, password } = req.body;
   console.log('manual signup logic:', email, fullName, password);
   console.log('Database connection:', {
     host: process.env.PGHOST,
@@ -31,14 +27,9 @@ export async function signup(req, res) {
   }
 
   try {
-    console.log('Attempting database connection...');
     const client = await pool.connect();
-    console.log('Database connected successfully');
-
-    console.log('Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    console.log('Executing insert query...');
     const result = await client.query(
       `INSERT INTO users (name, email, password, source, created_at)
        VALUES ($1, $2, $3, $4, $5)
@@ -51,11 +42,9 @@ export async function signup(req, res) {
     console.log('user:', user)
 
     if (!user) {
-      client.release();
       return res.status(409).json({ error: "Email already exists." });
     }
 
-    console.log('Creating JWT...');
     // Create JWT
     const jwtToken = jwt.sign(
       { name: fullName, email: user.email },
@@ -63,7 +52,6 @@ export async function signup(req, res) {
       { expiresIn: "7d" }
     );
 
-    console.log('Setting cookie...');
     // Set JWT as cookie
     res.cookie("jwtToken", jwtToken, {
       httpOnly: true,
@@ -73,8 +61,6 @@ export async function signup(req, res) {
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days in ms
     });
 
-    console.log('Signup successful');
-    client.release();
     return res.status(201).json({ message: "User registered successfully." });
 
   } catch (err) {
