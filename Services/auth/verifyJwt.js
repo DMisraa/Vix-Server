@@ -2,7 +2,11 @@ import jwt from "jsonwebtoken";
 
 export function verifyJwt(req, res) {
   console.log('=== JWT VERIFICATION REQUEST ===');
+  console.log('User-Agent:', req.get('User-Agent'));
+  console.log('Origin:', req.get('Origin'));
+  console.log('Referer:', req.get('Referer'));
   console.log('Cookies:', req.cookies);
+  console.log('Cookie header:', req.get('Cookie'));
   
   const jwtToken = req.cookies?.jwtToken;
   
