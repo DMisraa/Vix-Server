@@ -48,12 +48,28 @@ export async function login(req, res) {
     );
 
     console.log('Setting cookie...');
+    
+    // Detect if it's a mobile browser
+    const userAgent = req.get('User-Agent') || '';
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    
+    console.log('User-Agent:', userAgent);
+    console.log('Is Mobile:', isMobile);
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    
     res.cookie("jwtToken", jwtToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      sameSite: "Lax", // Use Lax for better mobile compatibility
       path: "/",
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+    });
+    
+    console.log('Cookie settings applied:', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      path: "/"
     });
 
     console.log('Login successful');

@@ -53,11 +53,27 @@ app.use((req, res, next) => {
 app.use(cors({
   origin: [ process.env.BASE_URL, process.env.PRODUCTION_URL ],
   methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['Set-Cookie']
 }));
 app.use(express.json({ limit: "10mb" }));  // Increase JSON payload size
 app.use(express.urlencoded({ limit: "10mb", extended: true })); 
 app.use(cookieParser()); // Add cookie-parser middleware
+
+// Middleware to handle mobile browser cookie issues
+app.use((req, res, next) => {
+  const userAgent = req.get('User-Agent') || '';
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  
+  if (isMobile) {
+    // Add headers that help with mobile browser cookie handling
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', req.get('Origin') || process.env.PRODUCTION_URL);
+  }
+  
+  next();
+});
 
 // Health check endpoint
 app.get('/health', healthCheck);
