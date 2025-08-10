@@ -57,8 +57,14 @@ export async function login(req, res) {
     console.log('Is Mobile:', isMobile);
     console.log('NODE_ENV:', process.env.NODE_ENV);
     
-    // For mobile browsers, use Lax even in production to avoid cross-origin issues
-    const sameSiteSetting = isMobile ? "Lax" : (process.env.NODE_ENV === "production" ? "None" : "Lax");
+    // Use None for production to allow cross-origin cookies
+    const sameSiteSetting = process.env.NODE_ENV === "production" ? "None" : "Lax";
+    
+    // Add additional headers for mobile Safari
+    if (isMobile) {
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Origin', req.get('Origin') || process.env.PRODUCTION_URL);
+    }
     
     res.cookie("jwtToken", jwtToken, {
       httpOnly: true,
