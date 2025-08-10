@@ -7,11 +7,21 @@ export function verifyJwt(req, res) {
   console.log('Referer:', req.get('Referer'));
   console.log('Cookies:', req.cookies);
   console.log('Cookie header:', req.get('Cookie'));
+  console.log('Authorization header:', req.get('Authorization'));
   
-  const jwtToken = req.cookies?.jwtToken;
+  let jwtToken = req.cookies?.jwtToken;
+  
+  // Fallback: check Authorization header if cookie is not available (mobile browsers)
+  if (!jwtToken) {
+    const authHeader = req.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      jwtToken = authHeader.substring(7);
+      console.log('Using JWT from Authorization header (mobile fallback)');
+    }
+  }
   
   if (!jwtToken) {
-    console.log('No JWT token found in cookies');
+    console.log('No JWT token found in cookies or Authorization header');
     return res.status(401).json({ message: "No token provided" });
   }
   

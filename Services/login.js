@@ -83,7 +83,15 @@ export async function login(req, res) {
 
     console.log('Login successful');
     client.release();
-    return res.status(200).json({ message: "Login successful." });
+    
+    // For mobile browsers, also return the token in response as fallback
+    const responseData = { message: "Login successful." };
+    if (isMobile) {
+      responseData.token = jwtToken; // Include token for mobile fallback
+      console.log('Mobile detected - including token in response');
+    }
+    
+    return res.status(200).json(responseData);
 
   } catch (err) {
     console.error("Login error:", err);
