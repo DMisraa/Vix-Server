@@ -57,10 +57,13 @@ export async function login(req, res) {
     console.log('Is Mobile:', isMobile);
     console.log('NODE_ENV:', process.env.NODE_ENV);
     
+    // For mobile browsers, use Lax even in production to avoid cross-origin issues
+    const sameSiteSetting = isMobile ? "Lax" : (process.env.NODE_ENV === "production" ? "None" : "Lax");
+    
     res.cookie("jwtToken", jwtToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "Lax", // Use Lax for better mobile compatibility
+      sameSite: sameSiteSetting,
       path: "/",
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
     });
@@ -68,7 +71,7 @@ export async function login(req, res) {
     console.log('Cookie settings applied:', {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "Lax",
+      sameSite: sameSiteSetting,
       path: "/"
     });
 
