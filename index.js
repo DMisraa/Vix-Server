@@ -59,7 +59,8 @@ app.use(cors({
       process.env.BASE_URL, 
       process.env.PRODUCTION_URL,
       'http://localhost:3000',
-      'https://localhost:3000'
+      'https://localhost:3000',
+      'https://vix-dc3t15ekv-daniels-projects-d3ae3bde.vercel.app' // Add the specific Vercel URL
     ].filter(Boolean);
     
     if (allowedOrigins.includes(origin) || allowedOrigins.some(allowed => origin.startsWith(allowed))) {
@@ -69,7 +70,7 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
+  methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
   exposedHeaders: ['Set-Cookie']
