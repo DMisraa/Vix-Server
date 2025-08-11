@@ -51,10 +51,27 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: [ process.env.BASE_URL, process.env.PRODUCTION_URL ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      process.env.BASE_URL, 
+      process.env.PRODUCTION_URL,
+      'http://localhost:3000',
+      'https://localhost:3000'
+    ].filter(Boolean);
+    
+    if (allowedOrigins.includes(origin) || allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
   exposedHeaders: ['Set-Cookie']
 }));
 app.use(express.json({ limit: "10mb" }));  // Increase JSON payload size
