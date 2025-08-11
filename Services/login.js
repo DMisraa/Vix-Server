@@ -44,30 +44,6 @@ export async function login(req, res) {
     const origin = req.get('Origin') || process.env.PRODUCTION_URL || process.env.BASE_URL;
     const isProduction = process.env.NODE_ENV === "production";
     
-    // Determine cookie domain based on environment
-    let cookieDomain = undefined;
-    if (isProduction && origin) {
-      try {
-        const url = new URL(origin);
-        const hostname = url.hostname;
-        
-        // For Vercel deployments, don't set domain to allow cross-domain cookies
-        // Vercel uses different domains for frontend and backend
-        if (hostname.includes('vercel.app') || hostname.includes('vercel.com')) {
-          cookieDomain = undefined; // Let browser handle it
-        } else if (hostname.startsWith('www.')) {
-          cookieDomain = hostname.substring(4); // Remove www
-        } else if (hostname !== 'localhost' && !hostname.includes('127.0.0.1')) {
-          cookieDomain = hostname;
-        }
-        
-        console.log('Origin hostname:', hostname, 'Cookie domain:', cookieDomain);
-      } catch (error) {
-        console.log('Error parsing origin URL:', error);
-        cookieDomain = undefined;
-      }
-    }
-    
     // Use None for production to allow cross-origin cookies
     const sameSiteSetting = isProduction ? "None" : "Lax";
     
@@ -85,9 +61,9 @@ export async function login(req, res) {
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
     };
     
-    // Add domain only if it's valid
-    if (cookieDomain) {
-      cookieOptions.domain = cookieDomain;
+    // Set domain for Vercel deployments to allow cross-subdomain cookies
+    if (isProduction) {
+      cookieOptions.domain = ".vercel.app";
     }
     
     console.log('Setting JWT cookie with options:', {
