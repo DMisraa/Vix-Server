@@ -49,12 +49,19 @@ export async function login(req, res) {
     if (isProduction && origin) {
       try {
         const url = new URL(origin);
-        // Set domain for cross-subdomain cookies (e.g., .yourdomain.com)
-        cookieDomain = url.hostname.startsWith('www.') ? url.hostname.substring(4) : url.hostname;
-        // Only set domain if it's not localhost
-        if (cookieDomain === 'localhost' || cookieDomain.includes('127.0.0.1')) {
-          cookieDomain = undefined;
+        const hostname = url.hostname;
+        
+        // For Vercel deployments, don't set domain to allow cross-domain cookies
+        // Vercel uses different domains for frontend and backend
+        if (hostname.includes('vercel.app') || hostname.includes('vercel.com')) {
+          cookieDomain = undefined; // Let browser handle it
+        } else if (hostname.startsWith('www.')) {
+          cookieDomain = hostname.substring(4); // Remove www
+        } else if (hostname !== 'localhost' && !hostname.includes('127.0.0.1')) {
+          cookieDomain = hostname;
         }
+        
+        console.log('Origin hostname:', hostname, 'Cookie domain:', cookieDomain);
       } catch (error) {
         console.log('Error parsing origin URL:', error);
         cookieDomain = undefined;
@@ -96,9 +103,8 @@ export async function login(req, res) {
 
     // For mobile browsers, also return the token in response as fallback
     const responseData = { message: "Login successful." };
-    if (isMobile) {
-      responseData.token = jwtToken;
-    }
+    // Always return token for cross-domain cookie support
+    responseData.token = jwtToken;
 
     client.release();
     return res.status(200).json(responseData);
