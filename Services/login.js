@@ -61,10 +61,9 @@ export async function login(req, res) {
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
     };
     
-    // Set domain for Vercel deployments to allow cross-subdomain cookies
-    if (isProduction) {
-      cookieOptions.domain = ".vercel.app";
-    }
+    // Don't set domain for cross-origin cookies - let browser handle it
+    // Setting domain from railway.app to .vercel.app won't work
+    // The browser will automatically handle cross-origin cookie sharing
     
     console.log('Setting JWT cookie with options:', {
       httpOnly: cookieOptions.httpOnly,
