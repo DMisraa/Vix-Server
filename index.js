@@ -51,8 +51,30 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: [ process.env.BASE_URL, process.env.PRODUCTION_URL ],
-  methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost for development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Allow all Vercel domains
+    if (origin.includes('vercel.app')) {
+      return callback(null, true);
+    }
+    
+    // Allow specific production URLs
+    const allowedOrigins = [process.env.BASE_URL, process.env.PRODUCTION_URL];
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    console.log('CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
+  methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   exposedHeaders: ['Set-Cookie']
