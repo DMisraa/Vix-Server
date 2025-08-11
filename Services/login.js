@@ -40,22 +40,42 @@ export async function login(req, res) {
     const userAgent = req.get('User-Agent') || '';
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
     
+    // Get the origin for cookie domain setting
+    const origin = req.get('Origin') || process.env.PRODUCTION_URL || process.env.BASE_URL;
+    const isProduction = process.env.NODE_ENV === "production";
+    
     // Use None for production to allow cross-origin cookies
-    const sameSiteSetting = process.env.NODE_ENV === "production" ? "None" : "Lax";
+    const sameSiteSetting = isProduction ? "None" : "Lax";
     
     // Add additional headers for mobile Safari
     if (isMobile) {
       res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Origin', req.get('Origin') || process.env.PRODUCTION_URL);
+      res.setHeader('Access-Control-Allow-Origin', origin);
     }
     
-    res.cookie("jwtToken", jwtToken, {
+    const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isProduction,
       sameSite: sameSiteSetting,
       path: "/",
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+    };
+    
+    // Set domain for Vercel deployments to allow cross-subdomain cookies
+    if (isProduction) {
+      cookieOptions.domain = ".vercel.app";
+    }
+    
+    console.log('Setting JWT cookie with options:', {
+      httpOnly: cookieOptions.httpOnly,
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      path: cookieOptions.path,
+      domain: cookieOptions.domain,
+      maxAge: cookieOptions.maxAge
     });
+    
+    res.cookie("jwtToken", jwtToken, cookieOptions);
 
     // For mobile browsers, also return the token in response as fallback
     const responseData = { message: "Login successful." };
