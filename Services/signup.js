@@ -52,31 +52,14 @@ export async function signup(req, res) {
       { expiresIn: "7d" }
     );
 
-    // Set JWT as cookie with proper domain for Vercel deployments
-    const isProduction = process.env.NODE_ENV === "production";
-    
-    const cookieOptions = {
+    // Set JWT as cookie
+    res.cookie("jwtToken", jwtToken, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "None" : "Lax",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days in ms
-    };
-    
-    // Don't set domain for cross-origin cookies - let browser handle it
-    // Setting domain from railway.app to .vercel.app won't work
-    // The browser will automatically handle cross-origin cookie sharing
-    
-    console.log('Setting JWT cookie in signup with options:', {
-      httpOnly: cookieOptions.httpOnly,
-      secure: cookieOptions.secure,
-      sameSite: cookieOptions.sameSite,
-      path: cookieOptions.path,
-      domain: cookieOptions.domain,
-      maxAge: cookieOptions.maxAge
     });
-    
-    res.cookie("jwtToken", jwtToken, cookieOptions);
 
     return res.status(201).json({ message: "User registered successfully." });
 
