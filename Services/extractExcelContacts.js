@@ -1,5 +1,4 @@
 import xlsx from "xlsx";
-import fs from "fs/promises";
 
 // Column name mappings for detection
 const NAME_COLUMNS = [
@@ -118,8 +117,8 @@ export async function extractExcelData(req, res) {
   }
 
   try {
-    const filePath = req.file.path;
-    const workbook = xlsx.readFile(filePath);
+    // Use buffer instead of path since we're using memoryStorage
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
     const rawContacts = xlsx.utils.sheet_to_json(sheet, { header: "A" });
@@ -130,7 +129,6 @@ export async function extractExcelData(req, res) {
     const { nameColumn, phoneColumn, columnInfo } = detectColumns(headers, selectedColumns);
     
     if (!nameColumn || !phoneColumn) {
-      await fs.unlink(filePath);
       return res.status(200).json({
         success: false,
         error: "Could not detect required columns",
@@ -160,8 +158,6 @@ export async function extractExcelData(req, res) {
         contactSource: "EXCEL"
       });
     }
-
-    await fs.unlink(filePath); // Clean up temp file
 
     return res.status(200).json({
       success: true,
