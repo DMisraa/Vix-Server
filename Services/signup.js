@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import pool from '../db/db.js';
 
 export async function signup(req, res) {
+  const { email, fullName, password } = req.body;
   
   console.log('manual signup logic:', email, fullName, password);
   console.log('Database connection:', {
