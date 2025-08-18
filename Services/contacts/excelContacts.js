@@ -2,12 +2,16 @@ import jwt from "jsonwebtoken";
 import * as XLSX from "xlsx";
 
 export function excelContacts(req, res) {
-  console.log('=== EXCEL CONTACTS REQUEST ===');
+  console.log('=== EXCEL CONTACTS HANDLER CALLED ===');
+  console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
+  console.log('Request path:', req.path);
   console.log('Cookies:', req.cookies);
   
   const jwtToken = req.cookies?.jwtToken;
   
   if (!jwtToken) {
+    console.log('=== EXCEL CONTACTS: Missing JWT Token ===');
     return res.status(401).json({ error: "Missing token" });
   }
 
