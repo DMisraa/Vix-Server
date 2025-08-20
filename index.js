@@ -52,7 +52,18 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: [ process.env.BASE_URL, process.env.PRODUCTION_URL ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [process.env.BASE_URL, process.env.PRODUCTION_URL];
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ["GET", "POST", 'PUT', 'PATCH', 'DELETE'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
@@ -62,15 +73,18 @@ app.use(express.json({ limit: "10mb" }));  // Increase JSON payload size
 app.use(express.urlencoded({ limit: "10mb", extended: true })); 
 app.use(cookieParser()); // Add cookie-parser middleware
 
-// Middleware to handle mobile browser cookie issues
+// Middleware to handle cross-origin cookie issues
 app.use((req, res, next) => {
-  const userAgent = req.get('User-Agent') || '';
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  // Add headers that help with cross-origin cookie handling
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   
-  if (isMobile) {
-    // Add headers that help with mobile browser cookie handling
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', req.get('Origin') || process.env.PRODUCTION_URL);
+  // Set proper origin header for cross-origin requests
+  const origin = req.get('Origin');
+  if (origin) {
+    const allowedOrigins = [process.env.BASE_URL, process.env.PRODUCTION_URL];
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
   }
   
   next();

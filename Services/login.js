@@ -59,12 +59,14 @@ export async function login(req, res) {
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "Lax",
+        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
         maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
       });
 
       responseData.accessToken = accessToken; // Short-lived token for localStorage
+      
+      console.log('🍪 Set refreshToken cookie for iOS');
       
     } else {
       // Android/Desktop: Use pure HTTP-only cookies (maximum security)
@@ -80,10 +82,12 @@ export async function login(req, res) {
       res.cookie("jwtToken", jwtToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "Lax",
+        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
         maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
       });
+      
+      console.log('🍪 Set jwtToken cookie for Android/Desktop');
     }
 
     client.release();

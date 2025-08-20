@@ -1,6 +1,10 @@
 import jwt from "jsonwebtoken";
 
 export function verifyJwt(req, res) {
+  // Debug logging
+  console.log('🔍 Verify JWT - Cookies:', Object.keys(req.cookies || {}));
+  console.log('🔍 Verify JWT - Authorization header:', req.get('Authorization') ? 'Present' : 'Missing');
+  
   // Check for JWT token in cookies (Android/Desktop approach)
   let jwtToken = req.cookies?.jwtToken;
   
@@ -13,6 +17,7 @@ export function verifyJwt(req, res) {
   }
   
   if (!jwtToken) {
+    console.log('❌ No token found in cookies or Authorization header');
     return res.status(401).json({ message: "No token provided" });
   }
   

@@ -2,10 +2,14 @@ import jwt from "jsonwebtoken";
 
 export async function refreshToken(req, res) {
   try {
+    // Debug logging
+    console.log('🔄 Refresh Token - Cookies:', Object.keys(req.cookies || {}));
+    
     // Get refresh token from HTTP-only cookie
     const refreshToken = req.cookies.refreshToken;
     
     if (!refreshToken) {
+      console.log('❌ No refresh token found in cookies');
       return res.status(401).json({ message: "No refresh token provided" });
     }
     
