@@ -34,6 +34,7 @@ import { verifyJwt } from "./Services/auth/verifyJwt.js";
 import { validateInvitation } from "./Services/auth/validateInvitation.js";
 import { createInvitation } from "./Services/auth/createInvitation.js";
 import { logout } from "./Services/auth/logout.js";
+import { refreshToken } from "./Services/auth/refreshToken.js";
 import { googleContacts } from "./Services/contacts/googleContacts.js";
 import { googleContactsFetch } from "./Services/contacts/googleContactsFetch.js";
 import { excelContacts } from "./Services/contacts/excelContacts.js";
@@ -80,6 +81,9 @@ app.get('/health', healthCheck);
 
 // JWT verification endpoint
 app.get('/api/verify-jwt', verifyJwt);
+
+// Refresh token endpoint
+app.post('/api/refresh-token', refreshToken);
 
 // Validate invitation endpoint
 app.post('/api/validate-invitation', validateInvitation);

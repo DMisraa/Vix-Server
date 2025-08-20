@@ -39,20 +39,18 @@ export async function googleAuth(req, res) {
       { expiresIn: "7d" }
     );
 
-    // iOS-friendly cookie settings
-    // Use Lax for better iOS compatibility, secure only in production
     res.setHeader("Set-Cookie", [
       cookie.serialize("token", accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // false in development for iOS
-        sameSite: "Lax", // More permissive for iOS Safari
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
         maxAge: 60 * 60 * 24 * 7, // 7 days
       }),
       cookie.serialize("jwtToken", jwtToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // false in development for iOS
-        sameSite: "Lax", // More permissive for iOS Safari
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
         maxAge: 60 * 60 * 24 * 7,
       }),

@@ -1,7 +1,16 @@
 import jwt from "jsonwebtoken";
 
 export function verifyJwt(req, res) {
-  const jwtToken = req.cookies?.jwtToken;
+  // Check for JWT token in cookies (Android/Desktop approach)
+  let jwtToken = req.cookies?.jwtToken;
+  
+  // Check Authorization header for access token (iOS approach)
+  if (!jwtToken) {
+    const authHeader = req.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      jwtToken = authHeader.substring(7);
+    }
+  }
   
   if (!jwtToken) {
     return res.status(401).json({ message: "No token provided" });
@@ -11,7 +20,12 @@ export function verifyJwt(req, res) {
     const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
     res.json({ user: decoded });
   } catch (error) {
-    console.error('JWT verification failed:', error);
+    console.error('Token verification failed:', error);
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: "Token expired" });
+    }
+    
     res.status(401).json({ message: "Invalid token" });
   }
 } 
