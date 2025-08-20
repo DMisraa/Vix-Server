@@ -36,13 +36,12 @@ export async function login(req, res) {
       { expiresIn: "7d" }
     );
 
-    // Use None for production to allow cross-origin cookies
-    const sameSiteSetting = process.env.NODE_ENV === "production" ? "None" : "Lax";
-    
+    // iOS-friendly cookie settings
+    // Use Lax for better iOS compatibility, secure only in production
     res.cookie("jwtToken", jwtToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: sameSiteSetting,
+      secure: process.env.NODE_ENV === "production", // false in development for iOS
+      sameSite: "Lax", // More permissive for iOS Safari
       path: "/",
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
     });
