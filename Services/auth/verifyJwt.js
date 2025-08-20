@@ -1,15 +1,7 @@
 import jwt from "jsonwebtoken";
 
 export function verifyJwt(req, res) {
-  let jwtToken = req.cookies?.jwtToken;
-  
-  // Fallback: check Authorization header if cookie is not available (mobile browsers)
-  if (!jwtToken) {
-    const authHeader = req.get('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      jwtToken = authHeader.substring(7);
-    }
-  }
+  const jwtToken = req.cookies?.jwtToken;
   
   if (!jwtToken) {
     return res.status(401).json({ message: "No token provided" });
