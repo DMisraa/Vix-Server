@@ -52,7 +52,6 @@ export async function signup(req, res) {
 
     if (isIOS) {
       // iOS: Use hybrid approach (short-lived access token + refresh token)
-      console.log('📱 iOS device detected - using hybrid token approach for signup');
       
       const accessToken = jwt.sign(
         { name: fullName, email: user.email },
@@ -84,7 +83,6 @@ export async function signup(req, res) {
       
     } else {
       // Android/Desktop: Use pure HTTP-only cookies (maximum security)
-      console.log('🖥️ Android/Desktop device detected - using HTTP-only cookies for signup');
       
       const jwtToken = jwt.sign(
         { name: fullName, email: user.email },

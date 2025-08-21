@@ -41,7 +41,6 @@ export async function login(req, res) {
 
     if (isIOS) {
       // iOS: Use hybrid approach (short-lived access token + refresh token)
-      console.log('📱 iOS device detected - using hybrid token approach');
       
       const accessToken = jwt.sign(
         { name: user.name, email: user.email },
@@ -66,11 +65,8 @@ export async function login(req, res) {
 
       responseData.accessToken = accessToken; // Short-lived token for localStorage
       
-      console.log('🍪 Set refreshToken cookie for iOS');
-      
     } else {
       // Android/Desktop: Use pure HTTP-only cookies (maximum security)
-      console.log('🖥️ Android/Desktop device detected - using HTTP-only cookies');
       
       const jwtToken = jwt.sign(
         { name: user.name, email: user.email },
@@ -86,8 +82,6 @@ export async function login(req, res) {
         path: "/",
         maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
       });
-      
-      console.log('🍪 Set jwtToken cookie for Android/Desktop');
     }
 
     client.release();
