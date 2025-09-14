@@ -45,13 +45,13 @@ export async function login(req, res) {
       const accessToken = jwt.sign(
         { name: user.name, email: user.email },
         process.env.JWT_SECRET,
-        { expiresIn: "15m" }
+        { expiresIn: "2m" }
       );
 
       const refreshToken = jwt.sign(
         { name: user.name, email: user.email },
         process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: "2m" }
       );
 
       // Store refresh token in HTTP-only cookie

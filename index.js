@@ -9,7 +9,7 @@ import { sendContactsToDatabase } from "./Services/database/sendContactsToDataba
 import { googleAuth } from "./Services/googleAuth.js";
 import { signup } from "./Services/signup.js";
 import { login } from "./Services/login.js";
-import { getContactsByOwner } from "./Services/database/getContactsByOwner.js";
+import { getContactsByOwner, getContactsByEventWithTags } from "./Services/database/getContactsByOwner.js";
 import { sendInvitationResponse } from "./Services/database/sendInvitationResponse.js";
 import { sendEventMessages } from "./Services/database/sendEventMessages.js";
 import { createEvent } from "./Services/database/createEvent.js";
@@ -40,6 +40,8 @@ import { googleContactsFetch } from "./Services/contacts/googleContactsFetch.js"
 import { excelContacts } from "./Services/contacts/excelContacts.js";
 import { appleContacts } from "./Services/contacts/appleContacts.js";
 import { healthCheck } from "./Services/health.js";
+import { initializeWhatsApp, getWhatsAppStatus, cleanupActiveTokens, getActiveTokensInfo, processWhatsAppMessage } from "./Services/whatsapp/whatsappListener.js";
+import { updateContactTags, getUserTags, getContactsByTag, addTagsColumnToContacts, updateTagName, removeTag } from "./Services/database/addTagsToContacts.js";
 
 const port = 4000
 const app = express();
@@ -135,6 +137,7 @@ app.post("/api/auth/google", googleAuth)
 app.post("/api/contacts", sendContactsToDatabase)
 
 app.post("/contacts/by-owner", getContactsByOwner)
+app.post("/contacts/by-event-with-tags", getContactsByEventWithTags)
 
 app.post("/signup", signup)
 
@@ -167,5 +170,44 @@ app.post('/upload-guest-contacts', uploadGuestContacts);
 // Guest uploads fetch endpoint
 app.get('/api/guest-uploads', getGuestUploads);
 app.get('/api/guest-uploads/:uploadId/contacts', getGuestUploadContacts);
+
+// WhatsApp endpoints
+app.get('/api/whatsapp/status', (req, res) => {
+    const status = getWhatsAppStatus();
+    res.json(status);
+});
+
+app.get('/api/whatsapp/tokens', (req, res) => {
+    const tokens = getActiveTokensInfo();
+    res.json(tokens);
+});
+
+app.post('/api/whatsapp/cleanup', (req, res) => {
+    cleanupActiveTokens();
+    res.json({ message: 'Token cleanup completed' });
+});
+
+// Test endpoint for WhatsApp message processing
+app.post('/api/whatsapp/test-message', async (req, res) => {
+    try {
+        const { message, senderNumber } = req.body;
+        const result = await processWhatsAppMessage(message, senderNumber);
+        res.json(result);
+    } catch (error) {
+        console.error('Error processing test message:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// Tag management endpoints
+app.post('/api/contacts/update-tags', updateContactTags);
+app.post('/api/contacts/update-tag-name', updateTagName);
+app.post('/api/contacts/remove-tag', removeTag);
+app.post('/api/contacts/tags', getUserTags);
+app.post('/api/contacts/by-tag', getContactsByTag);
+
+// Initialize WhatsApp listener
+initializeWhatsApp();
+
 
 app.listen(port, () => console.log(`Server running on port ${port}`));

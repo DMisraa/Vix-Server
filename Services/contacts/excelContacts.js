@@ -40,6 +40,7 @@ export function excelContacts(req, res) {
             phoneNumber: "No local number",
             uploadedByEmail: email,
             contactSource: "Excel",
+            tags: [] // Initialize with empty tags array
           };
         }
 
@@ -71,6 +72,7 @@ export function excelContacts(req, res) {
           phoneNumber: phoneNumber || "No number provided",
           uploadedByEmail: email,
           contactSource: "Excel",
+          tags: [] // Initialize with empty tags array
         };
       })
       .filter(Boolean);

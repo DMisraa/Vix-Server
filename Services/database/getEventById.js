@@ -30,25 +30,46 @@ export async function getEventById(req, res) {
 
     const contacts = contactsResult.rows;
 
+    // Map celebrator names based on event type
+    const eventType = event.event_type;
+    let celebratorMapping = {};
+    
+    if (eventType === 'wedding') {
+      celebratorMapping = {
+        groom_name: event.celebrator1_name,
+        bride_name: event.celebrator2_name
+      };
+    } else if (eventType === 'bar_mitzvah') {
+      celebratorMapping = {
+        bar_mitzvah_boy_name: event.celebrator1_name
+      };
+    } else if (eventType === 'bat_mitzvah') {
+      celebratorMapping = {
+        bat_mitzvah_girl_name: event.celebrator1_name
+      };
+    } else if (eventType === 'brit_milah') {
+      celebratorMapping = {
+        brit_milah_boy_name: event.celebrator1_name
+      };
+    }
+
+    const responseEvent = {
+      id: event.id,
+      name: event.event_name || event.name || 'Event', // Map event_name to name
+      eventType: event.event_type,
+      event_date: event.event_date,
+      venue_name: event.venue_name || "", // This might be null if column doesn't exist
+      venue_address: event.location || "", // Map location to venue_address
+      event_name: event.event_name,
+      imageUrl: event.image_url,
+      owner_email: event.owner_email,
+      contacts: contacts,
+      ...celebratorMapping
+    };
+    
     res.status(200).json({
       success: true,
-      event: {
-        id: event.id,
-        name: event.event_name || event.name || 'Event', // Map event_name to name
-        eventType: event.event_type,
-        event_date: event.event_date,
-        venue_name: event.venue_name || "", // This might be null if column doesn't exist
-        venue_address: event.location || "", // Map location to venue_address
-        groom_name: event.celebrator1_name, // Map celebrator1_name to groom_name
-        bride_name: event.celebrator2_name, // Map celebrator2_name to bride_name
-        bar_mitzvah_boy_name: event.celebrator1_name, // Map for bar mitzvah
-        bat_mitzvah_girl_name: event.celebrator1_name, // Map for bat mitzvah
-        brit_milah_boy_name: event.celebrator1_name, // Map for brit mitzvah
-        event_name: event.event_name,
-        imageUrl: event.image_url,
-        owner_email: event.owner_email,
-        contacts: contacts
-      }
+      event: responseEvent
     });
   } catch (err) {
     console.error("Error fetching event:", err);

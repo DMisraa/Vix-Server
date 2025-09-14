@@ -11,6 +11,9 @@ export async function createEvent(req, res) {
   try {
     await client.query('BEGIN');
 
+    // Handle empty date string - convert to NULL for PostgreSQL
+    const eventDate = event.event_date && event.event_date.trim() !== '' ? event.event_date : null;
+
     // Prepare the values for database insertion
     const insertValues = [
       event.id, 
@@ -21,7 +24,7 @@ export async function createEvent(req, res) {
       event.groom_name || event.bride_name || event.bar_mitzvah_boy_name || event.bat_mitzvah_girl_name || event.brit_milah_boy_name || null, // celebrator1
       event.bride_name || null, // celebrator2 (for weddings)
       event.venue_address || null, // event address/location
-      event.event_date || null, // event date
+      eventDate, // event date
       event.venue_name || null // venue name
     ];
     

@@ -3,8 +3,6 @@ import pool from "../../db/db.js";
 export async function updateEvent(req, res) {
   const { eventId, eventData } = req.body;
 
-  console.log('updateEvent called with:', { eventId, eventData });
-
   if (!eventId || !eventData) {
     console.log('Missing required fields:', { eventId, eventData });
     return res.status(400).json({ error: "Event ID and event data are required" });
@@ -27,6 +25,9 @@ export async function updateEvent(req, res) {
     let updateQuery;
     let queryParams;
     
+    // Handle empty date string - convert to NULL for PostgreSQL
+    const eventDate = eventData.event_date && eventData.event_date.trim() !== '' ? eventData.event_date : null;
+
     if (hasVenueNameColumn) {
       updateQuery = `
         UPDATE events SET
@@ -47,7 +48,7 @@ export async function updateEvent(req, res) {
         eventData.groom_name || eventData.bride_name || eventData.bar_mitzvah_boy_name || eventData.bat_mitzvah_girl_name || eventData.brit_milah_boy_name,
         eventData.bride_name,
         eventData.event_name,
-        eventData.event_date,
+        eventDate,
         eventData.imageUrl,
         eventId,
         eventData.owner_email
@@ -71,15 +72,12 @@ export async function updateEvent(req, res) {
         eventData.groom_name || eventData.bride_name || eventData.bar_mitzvah_boy_name || eventData.bat_mitzvah_girl_name || eventData.brit_milah_boy_name,
         eventData.bride_name,
         eventData.event_name,
-        eventData.event_date,
+        eventDate,
         eventData.imageUrl,
         eventId,
         eventData.owner_email
       ];
     }
-
-    console.log('Update query:', updateQuery);
-    console.log('Query params:', queryParams);
 
     const result = await client.query(updateQuery, queryParams);
 
@@ -98,6 +96,29 @@ export async function updateEvent(req, res) {
 
     await client.query('COMMIT');
 
+    // Map celebrator names based on event type
+    const eventType = updatedEvent.event_type;
+    let celebratorMapping = {};
+    
+    if (eventType === 'wedding') {
+      celebratorMapping = {
+        groom_name: updatedEvent.celebrator1_name,
+        bride_name: updatedEvent.celebrator2_name
+      };
+    } else if (eventType === 'bar_mitzvah') {
+      celebratorMapping = {
+        bar_mitzvah_boy_name: updatedEvent.celebrator1_name
+      };
+    } else if (eventType === 'bat_mitzvah') {
+      celebratorMapping = {
+        bat_mitzvah_girl_name: updatedEvent.celebrator1_name
+      };
+    } else if (eventType === 'brit_milah') {
+      celebratorMapping = {
+        brit_milah_boy_name: updatedEvent.celebrator1_name
+      };
+    }
+
     res.status(200).json({
       success: true,
       message: "Event updated successfully",
@@ -108,14 +129,10 @@ export async function updateEvent(req, res) {
         event_date: updatedEvent.event_date,
         venue_name: updatedEvent.venue_name || "",
         venue_address: updatedEvent.location || "",
-        groom_name: updatedEvent.celebrator1_name,
-        bride_name: updatedEvent.celebrator2_name,
-        bar_mitzvah_boy_name: updatedEvent.celebrator1_name,
-        bat_mitzvah_girl_name: updatedEvent.celebrator1_name,
-        brit_milah_boy_name: updatedEvent.celebrator1_name,
         event_name: updatedEvent.event_name,
         imageUrl: updatedEvent.image_url,
-        owner_email: updatedEvent.owner_email
+        owner_email: updatedEvent.owner_email,
+        ...celebratorMapping
       }
     });
   } catch (err) {

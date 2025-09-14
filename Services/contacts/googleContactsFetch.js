@@ -54,7 +54,8 @@ export async function googleContactsFetch(req, res) {
           phoneNumber: phoneNumbers,
           canonicalForm: phoneNumbers, // For now, use the same as phoneNumber
           uploadedByEmail: email,
-          contactSource: "GOOGLE"
+          contactSource: "GOOGLE",
+          tags: [] // Initialize with empty tags array
         };
       });
 

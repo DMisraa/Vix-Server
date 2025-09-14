@@ -41,7 +41,10 @@ export async function getGuestUploadContacts(req, res) {
       res.json({ 
         success: true, 
         upload: uploadResult.rows[0],
-        contacts: contactsResult.rows 
+        contacts: contactsResult.rows.map(contact => ({
+          ...contact,
+          tags: [] // Always return empty tags array for guest contacts
+        }))
       });
 
     } finally {

@@ -14,10 +14,18 @@ export async function sendContactsToDatabase(req, res) {
       const insertedIds = [];
       for (const contact of contacts) {
         const result = await client.query(
-          `INSERT INTO contacts (google_id, display_name, canonical_form, phone_number, contact_source, contact_owner)
-           VALUES ($1, $2, $3, $4, $5, $6)
+          `INSERT INTO contacts (google_id, display_name, canonical_form, phone_number, contact_source, contact_owner, tags)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id`,
-          [contact.uploadedByGoogleId, contact.displayName, contact.canonicalForm, contact.phoneNumber, contact.contactSource, contact.uploadedByEmail]
+          [
+            contact.uploadedByGoogleId, 
+            contact.displayName, 
+            contact.canonicalForm, 
+            contact.phoneNumber, 
+            contact.contactSource, 
+            contact.uploadedByEmail, 
+            contact.tags || []
+          ]
         );
         insertedIds.push(result.rows[0].id);
       }

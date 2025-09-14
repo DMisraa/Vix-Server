@@ -58,6 +58,7 @@ export function appleContacts(req, res) {
             phoneNumber,
             uploadedByEmail: email,
             contactSource: "VCF",
+            tags: [] // Initialize with empty tags array
           };
         } catch (error) {
           console.log("Error parsing a contact:", error);

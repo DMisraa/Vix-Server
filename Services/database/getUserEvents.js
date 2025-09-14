@@ -44,6 +44,29 @@ export async function getUserEvents(req, res) {
         displayName = event.event_name || event.name || 'Event';
       }
       
+      // Map celebrator names based on event type
+      const eventType = event.event_type;
+      let celebratorMapping = {};
+      
+      if (eventType === 'wedding') {
+        celebratorMapping = {
+          groom_name: event.celebrator1_name,
+          bride_name: event.celebrator2_name
+        };
+      } else if (eventType === 'bar_mitzvah') {
+        celebratorMapping = {
+          bar_mitzvah_boy_name: event.celebrator1_name
+        };
+      } else if (eventType === 'bat_mitzvah') {
+        celebratorMapping = {
+          bat_mitzvah_girl_name: event.celebrator1_name
+        };
+      } else if (eventType === 'brit_milah') {
+        celebratorMapping = {
+          brit_milah_boy_name: event.celebrator1_name
+        };
+      }
+      
       return {
         id: event.id,
         name: displayName,
@@ -51,15 +74,11 @@ export async function getUserEvents(req, res) {
         event_date: event.event_date,
         venue_name: event.venue_name || "", // This might be null if column doesn't exist
         venue_address: event.location || "", // Map location to venue_address
-        groom_name: event.celebrator1_name, // Map celebrator1_name to groom_name
-        bride_name: event.celebrator2_name, // Map celebrator2_name to bride_name
-        bar_mitzvah_boy_name: event.celebrator1_name, // Map for bar mitzvah
-        bat_mitzvah_girl_name: event.celebrator1_name, // Map for bat mitzvah
-        brit_milah_boy_name: event.celebrator1_name, // Map for brit mitzvah
         event_name: event.event_name,
         imageUrl: event.image_url,
         owner_email: event.owner_email,
         contactIds: contactsMap[event.id] || [],
+        ...celebratorMapping
       };
     });
 
