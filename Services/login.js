@@ -51,7 +51,7 @@ export async function login(req, res) {
       const refreshToken = jwt.sign(
         { name: user.name, email: user.email },
         process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-        { expiresIn: "2m" }
+        { expiresIn: "7d" }  // 7 days for refresh token
       );
 
       // Store refresh token in HTTP-only cookie
@@ -60,10 +60,10 @@ export async function login(req, res) {
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days - matches JWT expiration
       });
 
-      responseData.accessToken = accessToken; // Short-lived token for localStorage
+      responseData.accessToken = accessToken;
       
     } else {
       // Android/Desktop: Use pure HTTP-only cookies (maximum security)
