@@ -1,21 +1,27 @@
 export function logout(req, res) {
   console.log('=== LOGOUT REQUEST ===');
+  console.log('Clearing all authentication cookies...');
   
-  // Clear cookies by setting them to expire in the past
-  res.clearCookie('jwtToken', {
+  // Clear all authentication cookies with proper options
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
     path: "/",
-  });
-  
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-    path: "/",
-  });
+  };
 
-  console.log('User logged out successfully');
-  res.json({ message: "Logged out" });
+  // Clear old jwtToken cookie (backward compatibility)
+  res.clearCookie('jwtToken', cookieOptions);
+  
+  // Clear accessToken cookie (new system)
+  res.clearCookie('accessToken', cookieOptions);
+  
+  // Clear refreshToken cookie (new system)
+  res.clearCookie('refreshToken', cookieOptions);
+  
+  // Clear any other token cookies
+  res.clearCookie('token', cookieOptions);
+
+  console.log('All authentication cookies cleared successfully');
+  res.json({ message: "Logged out successfully" });
 } 

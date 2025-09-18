@@ -30,57 +30,48 @@ export async function login(req, res) {
       return res.status(401).json({ error: "אימייל או סיסמה שגויים." });
     }
 
-    // Detect iOS device
+    // Generate tokens (same for all platforms)
+    const accessToken = jwt.sign(
+      { name: user.name, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "2m" }
+    );
+
+    const refreshToken = jwt.sign(
+      { name: user.name, email: user.email },
+      process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // Store refresh token in HTTP-only cookie (all platforms)
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+    });
+
+    // Detect iOS device to determine response format
     const userAgent = req.get('User-Agent') || '';
     const isIOS = /iPad|iPhone|iPod/.test(userAgent);
-    
+
     let responseData = { 
       message: "Login successful.",
       user: { name: user.name, email: user.email }
     };
 
     if (isIOS) {
-      // iOS: Use hybrid approach (short-lived access token + refresh token)
-      
-      const accessToken = jwt.sign(
-        { name: user.name, email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      const refreshToken = jwt.sign(
-        { name: user.name, email: user.email },
-        process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-        { expiresIn: "7d" }  // 7 days for refresh token
-      );
-
-      // Store refresh token in HTTP-only cookie
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days - matches JWT expiration
-      });
-
+      // iOS: Return access token in response body for localStorage
       responseData.accessToken = accessToken;
-      
     } else {
-      // Android/Desktop: Use pure HTTP-only cookies (maximum security)
-      
-      const jwtToken = jwt.sign(
-        { name: user.name, email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      // Store long-lived token in HTTP-only cookie
-      res.cookie("jwtToken", jwtToken, {
+      // Android/Desktop: Store access token in HTTP-only cookie
+      res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+        maxAge: 60 * 60 * 15 * 1000, // 15 minutes
       });
     }
 

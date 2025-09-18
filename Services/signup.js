@@ -46,61 +46,52 @@ export async function signup(req, res) {
       return res.status(409).json({ error: "Email already exists." });
     }
 
-    // Detect iOS device
+    // Generate tokens (same for all platforms)
+    const accessToken = jwt.sign(
+      { name: fullName, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    const refreshToken = jwt.sign(
+      { name: fullName, email: user.email },
+      process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // Store refresh token in HTTP-only cookie (all platforms)
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+    });
+
+    // Detect iOS device to determine response format
     const userAgent = req.get('User-Agent') || '';
     const isIOS = /iPad|iPhone|iPod/.test(userAgent);
 
+    let responseData = { 
+      message: "User registered successfully.",
+      user: { name: fullName, email: user.email }
+    };
+
     if (isIOS) {
-      // iOS: Use hybrid approach (short-lived access token + refresh token)
-      
-      const accessToken = jwt.sign(
-        { name: fullName, email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: "15m" }
-      );
-
-      const refreshToken = jwt.sign(
-        { name: fullName, email: user.email },
-        process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      // Store refresh token in HTTP-only cookie
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
-      });
-
-      // Return access token for client storage
-      return res.status(201).json({ 
-        message: "User registered successfully.",
-        accessToken: accessToken,
-        user: { name: fullName, email: user.email }
-      });
-      
+      // iOS: Return access token in response body for localStorage
+      responseData.accessToken = accessToken;
     } else {
-      // Android/Desktop: Use pure HTTP-only cookies (maximum security)
-      
-      const jwtToken = jwt.sign(
-        { name: fullName, email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      // Store long-lived token in HTTP-only cookie
-      res.cookie("jwtToken", jwtToken, {
+      // Android/Desktop: Store access token in HTTP-only cookie
+      res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+        maxAge: 60 * 60 * 15 * 1000, // 15 minutes
       });
-
-      return res.status(201).json({ message: "User registered successfully." });
     }
+
+    return res.status(201).json(responseData);
 
   } catch (err) {
     console.error("Signup error:", err);
