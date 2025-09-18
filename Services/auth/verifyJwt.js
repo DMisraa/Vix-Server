@@ -1,8 +1,13 @@
 import jwt from "jsonwebtoken";
 
 export function verifyJwt(req, res) {
-  // Check for access token in cookies (Android/Desktop approach)
+  // Check for access token in cookies (Desktop/Android approach)
   let accessToken = req.cookies?.accessToken;
+  
+  // Check for JWT token in cookies (iOS approach)
+  if (!accessToken) {
+    accessToken = req.cookies?.jwtToken;
+  }
   
   // Check Authorization header for access token (iOS approach)
   if (!accessToken) {
@@ -10,11 +15,6 @@ export function verifyJwt(req, res) {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       accessToken = authHeader.substring(7);
     }
-  }
-
-  // Fallback: Check for old jwtToken cookie (for backward compatibility)
-  if (!accessToken) {
-    accessToken = req.cookies?.jwtToken;
   }
   
   if (!accessToken) {

@@ -30,29 +30,7 @@ export async function login(req, res) {
       return res.status(401).json({ error: "אימייל או סיסמה שגויים." });
     }
 
-    // Generate tokens (same for all platforms)
-    const accessToken = jwt.sign(
-      { name: user.name, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "2m" }
-    );
-
-    const refreshToken = jwt.sign(
-      { name: user.name, email: user.email },
-      process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    // Store refresh token in HTTP-only cookie (all platforms)
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
-    });
-
-    // Detect iOS device to determine response format
+    // Detect iOS device
     const userAgent = req.get('User-Agent') || '';
     const isIOS = /iPad|iPhone|iPod/.test(userAgent);
 
@@ -62,10 +40,43 @@ export async function login(req, res) {
     };
 
     if (isIOS) {
-      // iOS: Return access token in response body for localStorage
-      responseData.accessToken = accessToken;
+      // iOS: Use 7-day JWT token with smart extension
+      const jwtToken = jwt.sign(
+        { name: user.name, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" } // 7 days
+      );
+
+      // NO HTTP-only cookie for iOS access token - only localStorage
+      responseData.accessToken = jwtToken;
+      
     } else {
-      // Android/Desktop: Store access token in HTTP-only cookie
+      // Desktop/Android: Use refresh token rotation approach
+      
+      // Short-lived access token (15 minutes)
+      const accessToken = jwt.sign(
+        { name: user.name, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: "2m" }
+      );
+
+      // Long-lived refresh token (7 days)
+      const refreshToken = jwt.sign(
+        { name: user.name, email: user.email },
+        process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      // Store refresh token in HTTP-only cookie
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
+      });
+
+      // Store access token in HTTP-only cookie (Desktop/Android only)
       res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
