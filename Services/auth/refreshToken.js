@@ -2,15 +2,21 @@ import jwt from "jsonwebtoken";
 
 export async function refreshToken(req, res) {
   try {
+    console.log('=== REFRESH TOKEN REQUEST ===');
+    console.log('Cookies received:', Object.keys(req.cookies));
+    
     // Get refresh token from HTTP-only cookie
     const refreshToken = req.cookies.refreshToken;
     
     if (!refreshToken) {
+      console.log('No refresh token found in cookies');
       return res.status(401).json({ message: "No refresh token provided" });
     }
     
+    console.log('Refresh token found, verifying...');
     // Verify refresh token
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET);
+    console.log('Refresh token verified for user:', decoded.email);
     
     // Generate new short-lived access token (15 minutes)
     const newAccessToken = jwt.sign(
@@ -26,7 +32,9 @@ export async function refreshToken(req, res) {
       { expiresIn: "7d" }
     );
 
-    // Set the new refresh token in HTTP-only cookie
+    console.log('Generated new tokens, setting cookies...');
+
+    // Set the new refresh token in HTTP-only cookie (all platforms)
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -35,27 +43,29 @@ export async function refreshToken(req, res) {
       maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
     });
 
-    // Set the new access token in HTTP-only cookie (for desktop/Android)
-    res.cookie("accessToken", newAccessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-      path: "/",
-      maxAge: 60 * 60 * 15 * 1000, // 15 minutes
-    });
-    
     // Detect iOS device to determine response format
     const userAgent = req.get('User-Agent') || '';
     const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+    console.log('Device type:', isIOS ? 'iOS' : 'Desktop/Android');
 
     if (isIOS) {
-      // iOS: Return access token in response body for localStorage
+      // iOS: Return access token in response body for localStorage (NO HTTP-only cookie)
+      console.log('Returning access token in response body for iOS');
       res.json({ 
         accessToken: newAccessToken,
         message: "Token refreshed successfully"
       });
     } else {
-      // Desktop/Android: Access token is in cookie, no need to return it
+      // Desktop/Android: Set access token in HTTP-only cookie (NO response body)
+      console.log('Setting access token in HTTP-only cookie for Desktop/Android');
+      res.cookie("accessToken", newAccessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+        path: "/",
+        maxAge: 60 * 60 * 15 * 1000, // 15 minutes
+      });
+      
       res.json({ 
         message: "Token refreshed successfully"
       });
