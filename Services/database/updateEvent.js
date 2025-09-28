@@ -12,23 +12,55 @@ export async function updateEvent(req, res) {
   try {
     await client.query('BEGIN');
 
-    // First, let's check if the venue_name column exists
+    // Check if venue_name column exists
     const columnCheck = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
       WHERE table_name = 'events' AND column_name = 'venue_name'
     `);
-    
     const hasVenueNameColumn = columnCheck.rows.length > 0;
 
-    // Build the UPDATE query based on available columns
+    // Check if event_time column exists
+    const timeColumnCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'events' AND column_name = 'event_time'
+    `);
+    const hasEventTimeColumn = timeColumnCheck.rows.length > 0;
+
+    const eventDate = eventData.event_date && eventData.event_date.trim() !== '' ? eventData.event_date : null;
+
     let updateQuery;
     let queryParams;
     
-    // Handle empty date string - convert to NULL for PostgreSQL
-    const eventDate = eventData.event_date && eventData.event_date.trim() !== '' ? eventData.event_date : null;
-
-    if (hasVenueNameColumn) {
+    if (hasVenueNameColumn && hasEventTimeColumn) {
+      updateQuery = `
+        UPDATE events SET
+          event_type = $1,
+          venue_name = $2,
+          location = $3,
+          celebrator1_name = $4,
+          celebrator2_name = $5,
+          event_name = $6,
+          event_date = $7,
+          image_url = $8,
+          event_time = $9
+        WHERE id = $10 AND owner_email = $11
+      `;
+      queryParams = [
+        eventData.eventType,
+        eventData.venue_name,
+        eventData.venue_address,
+        eventData.groom_name || eventData.bride_name || eventData.bar_mitzvah_boy_name || eventData.bat_mitzvah_girl_name || eventData.brit_milah_boy_name,
+        eventData.bride_name,
+        eventData.event_name,
+        eventDate,
+        eventData.imageUrl,
+        eventData.event_time,
+        eventId,
+        eventData.owner_email
+      ];
+    } else if (hasVenueNameColumn && !hasEventTimeColumn) {
       updateQuery = `
         UPDATE events SET
           event_type = $1,
@@ -53,8 +85,33 @@ export async function updateEvent(req, res) {
         eventId,
         eventData.owner_email
       ];
+    } else if (!hasVenueNameColumn && hasEventTimeColumn) {
+      updateQuery = `
+        UPDATE events SET
+          event_type = $1,
+          location = $2,
+          celebrator1_name = $3,
+          celebrator2_name = $4,
+          event_name = $5,
+          event_date = $6,
+          image_url = $7,
+          event_time = $8
+        WHERE id = $9 AND owner_email = $10
+      `;
+      queryParams = [
+        eventData.eventType,
+        eventData.venue_address,
+        eventData.groom_name || eventData.bride_name || eventData.bar_mitzvah_boy_name || eventData.bat_mitzvah_girl_name || eventData.brit_milah_boy_name,
+        eventData.bride_name,
+        eventData.event_name,
+        eventDate,
+        eventData.imageUrl,
+        eventData.event_time,
+        eventId,
+        eventData.owner_email
+      ];
     } else {
-      // Fallback without venue_name column
+      // Fallback without venue_name and event_time columns
       updateQuery = `
         UPDATE events SET
           event_type = $1,
@@ -102,34 +159,36 @@ export async function updateEvent(req, res) {
     
     if (eventType === 'wedding') {
       celebratorMapping = {
-        groom_name: updatedEvent.celebrator1_name,
-        bride_name: updatedEvent.celebrator2_name
+        groom_name: updatedEvent.celebrator1_name || "",
+        bride_name: updatedEvent.celebrator2_name || ""
       };
     } else if (eventType === 'bar_mitzvah') {
       celebratorMapping = {
-        bar_mitzvah_boy_name: updatedEvent.celebrator1_name
+        bar_mitzvah_boy_name: updatedEvent.celebrator1_name || ""
       };
     } else if (eventType === 'bat_mitzvah') {
       celebratorMapping = {
-        bat_mitzvah_girl_name: updatedEvent.celebrator1_name
+        bat_mitzvah_girl_name: updatedEvent.celebrator1_name || ""
       };
     } else if (eventType === 'brit_milah') {
       celebratorMapping = {
-        brit_milah_boy_name: updatedEvent.celebrator1_name
+        brit_milah_boy_name: updatedEvent.celebrator1_name || ""
       };
     }
 
+    const displayName = updatedEvent.event_name || updatedEvent.name || 'אירוע ללא שם';
+
     res.status(200).json({
       success: true,
-      message: "Event updated successfully",
       event: {
         id: updatedEvent.id,
-        name: updatedEvent.event_name || updatedEvent.name || 'Event',
+        name: displayName,
         eventType: updatedEvent.event_type,
         event_date: updatedEvent.event_date,
         venue_name: updatedEvent.venue_name || "",
         venue_address: updatedEvent.location || "",
         event_name: updatedEvent.event_name,
+        event_time: updatedEvent.event_time || "",
         imageUrl: updatedEvent.image_url,
         owner_email: updatedEvent.owner_email,
         ...celebratorMapping

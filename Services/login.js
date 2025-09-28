@@ -57,7 +57,7 @@ export async function login(req, res) {
       const accessToken = jwt.sign(
         { name: user.name, email: user.email },
         process.env.JWT_SECRET,
-        { expiresIn: "2m" }
+        { expiresIn: "2h" }
       );
 
       // Long-lived refresh token (7 days)

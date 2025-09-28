@@ -61,6 +61,7 @@ export async function getEventById(req, res) {
       venue_name: event.venue_name || "", // This might be null if column doesn't exist
       venue_address: event.location || "", // Map location to venue_address
       event_name: event.event_name,
+      event_time: event.event_time || "",
       imageUrl: event.image_url,
       owner_email: event.owner_email,
       contacts: contacts,

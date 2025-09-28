@@ -4,15 +4,29 @@ export function createInvitation(req, res) {
   console.log('=== CREATE INVITATION REQUEST ===');
   console.log('Cookies:', req.cookies);
   
-  const jwtToken = req.cookies?.jwtToken;
+  // Check for access token in cookies (Desktop/Android approach)
+  let accessToken = req.cookies?.accessToken;
   
-  if (!jwtToken) {
+  // Check for JWT token in cookies (Google Auth approach)
+  if (!accessToken) {
+    accessToken = req.cookies?.jwtToken;
+  }
+  
+  // Check Authorization header for access token (iOS approach)
+  if (!accessToken) {
+    const authHeader = req.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7);
+    }
+  }
+  
+  if (!accessToken) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
     console.log('Verifying current user JWT...');
-    const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
+    const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
     const currentUserEmail = decoded.email;
 
     // Create secure invitation token for current user

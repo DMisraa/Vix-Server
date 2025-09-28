@@ -23,15 +23,16 @@ export async function createEvent(req, res) {
       event.imageUrl || null,
       event.groom_name || event.bride_name || event.bar_mitzvah_boy_name || event.bat_mitzvah_girl_name || event.brit_milah_boy_name || null, // celebrator1
       event.bride_name || null, // celebrator2 (for weddings)
-      event.venue_address || null, // event address/location
+      event.location || null, // event address/location
       eventDate, // event date
-      event.venue_name || null // venue name
+      event.venue_name || null, // venue name
+      event.event_time || null // event time
     ];
     
     // Insert new event with basic fields
     await client.query(
-      `INSERT INTO events (id, event_name, owner_email, event_type, image_url, celebrator1_name, celebrator2_name, location, event_date, venue_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO events (id, event_name, owner_email, event_type, image_url, celebrator1_name, celebrator2_name, location, event_date, venue_name, event_time)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       insertValues
     );
 

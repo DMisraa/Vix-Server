@@ -1,6 +1,4 @@
 export function logout(req, res) {
-  console.log('=== LOGOUT REQUEST ===');
-  console.log('Clearing all authentication cookies...');
   
   // Clear all authentication cookies with proper options
   const cookieOptions = {

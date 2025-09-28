@@ -4,14 +4,6 @@ import pool from '../db/db.js';
 
 export async function signup(req, res) {
   const { email, fullName, password } = req.body;
-  
-  console.log('manual signup logic:', email, fullName, password);
-  console.log('Database connection:', {
-    host: process.env.PGHOST,
-    database: process.env.PGDATABASE,
-    user: process.env.PGUSER,
-    databaseURL: process.env.DATABASE_URL,
-  });
 
   if (!email || !fullName || !password) {
     return res.status(400).json({ error: "All fields are required." });
@@ -40,7 +32,6 @@ export async function signup(req, res) {
     );
 
     const user = result.rows[0];
-    console.log('user:', user)
 
     if (!user) {
       return res.status(409).json({ error: "Email already exists." });
@@ -81,7 +72,7 @@ export async function signup(req, res) {
       const accessToken = jwt.sign(
         { name: fullName, email: user.email },
         process.env.JWT_SECRET,
-        { expiresIn: "15m" }
+        { expiresIn: "2h" }
       );
 
       // Long-lived refresh token (7 days)
