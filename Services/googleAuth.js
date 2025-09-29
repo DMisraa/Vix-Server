@@ -69,5 +69,7 @@ export async function googleAuth(req, res) {
   } catch (error) {
     console.error("Auth error:", error);
     res.status(500).json({ message: "Internal Server Error" });
+  } finally {
+    client.release(); // This was missing!
   }
 }
