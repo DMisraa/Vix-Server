@@ -42,26 +42,17 @@ export async function signup(req, res) {
     const isIOS = /iPad|iPhone|iPod/.test(userAgent);
 
     if (isIOS) {
-      // iOS: Use longer-lived JWT token (7 days) - simpler approach
+      // iOS: Use 7-day JWT token with smart extension (same as login)
       const jwtToken = jwt.sign(
         { name: fullName, email: user.email },
         process.env.JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: "7d" } // 7 days
       );
 
-      // Store in HTTP-only cookie (iOS can still use cookies, just not as reliably)
-      res.cookie("jwtToken", jwtToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
-      });
-
-      // Also return in response body for localStorage backup
+      // NO HTTP-only cookie for iOS access token - only localStorage
       return res.status(201).json({ 
         message: "User registered successfully.",
-        accessToken: jwtToken, // For localStorage backup
+        accessToken: jwtToken, // For localStorage
         user: { name: fullName, email: user.email }
       });
       
