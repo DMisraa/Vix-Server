@@ -51,38 +51,20 @@ export async function login(req, res) {
       responseData.accessToken = jwtToken;
       
     } else {
-      // Desktop/Android: Use refresh token rotation approach
-      
-      // Short-lived access token (15 minutes)
-      const accessToken = jwt.sign(
+      // Desktop/Android: Now also use 7-day JWT token (simplified approach)
+      const jwtToken = jwt.sign(
         { name: user.name, email: user.email },
         process.env.JWT_SECRET,
-        { expiresIn: "2h" }
+        { expiresIn: "7d" } // 7 days
       );
 
-      // Long-lived refresh token (7 days)
-      const refreshToken = jwt.sign(
-        { name: user.name, email: user.email },
-        process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      // Store refresh token in HTTP-only cookie
-      res.cookie("refreshToken", refreshToken, {
+      // Store 7-day JWT token in HTTP-only cookie for desktop/Android
+      res.cookie("jwtToken", jwtToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
         path: "/",
         maxAge: 60 * 60 * 24 * 7 * 1000, // 7 days
-      });
-
-      // Store access token in HTTP-only cookie (Desktop/Android only)
-      res.cookie("accessToken", accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-        path: "/",
-        maxAge: 60 * 60 * 15 * 1000, // 15 minutes
       });
     }
 

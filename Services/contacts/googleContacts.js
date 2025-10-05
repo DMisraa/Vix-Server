@@ -19,8 +19,14 @@ export async function googleContacts(req, res) {
 
   const token = req.query.token;
 
-  if (!token || !accessToken) {
-    return res.status(401).json({ error: "Missing token or accessToken", authRequired: true });
+  // If no Google OAuth token is provided, return authRequired to trigger OAuth flow
+  if (!token) {
+    return res.status(401).json({ error: "Google OAuth token required", authRequired: true });
+  }
+
+  // If no JWT token is provided, return unauthorized
+  if (!accessToken) {
+    return res.status(401).json({ error: "User authentication required" });
   }
 
   try {

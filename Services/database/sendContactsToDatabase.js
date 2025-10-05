@@ -3,8 +3,34 @@ import pool from "../../db/db.js";
 export async function sendContactsToDatabase(req, res) {
   try {
     const { contacts } = req.body;
-
     const client = await pool.connect();
+
+        // Validate contacts array
+        if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
+          return res.status(400).json({ error: "Invalid contacts data" });
+        }
+    
+        // Validate each contact
+        for (const contact of contacts) {
+          if (!contact.displayName || !contact.phoneNumber) {
+            return res.status(400).json({ error: "Missing required fields: displayName and phoneNumber" });
+          }
+          
+          // Validate name length - allow empty names but ensure they're strings
+          if (typeof contact.displayName !== 'string' || contact.displayName.length > 100) {
+            return res.status(400).json({ error: "Invalid displayName format or length" });
+          }
+          
+          // Validate phone number - allow special cases like "No phone number", "No local number", etc.
+          if (contact.phoneNumber !== "No phone number" && 
+              contact.phoneNumber !== "No local number" && 
+              contact.phoneNumber !== "No canonical number") {
+            const phoneDigits = contact.phoneNumber.replace(/\D/g, '');
+            if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+              return res.status(400).json({ error: "Invalid phone number format" });
+            }
+          }
+        }
 
     try {
       // Start transaction
