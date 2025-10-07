@@ -22,12 +22,22 @@ export async function googleAuth(req, res) {
       return res.status(400).json({ message: "Invalid Google token" });
     }
 
-    await client.query(
-      `INSERT INTO users (google_id, name, email, created_at, source)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (google_id) DO NOTHING`,
-      [googleData.id, googleData.name, googleData.email, new Date(), 'Google']
+    // Check if user already exists
+    const existingUser = await client.query(
+      `SELECT * FROM users WHERE google_id = $1`,
+      [googleData.id]
     );
+    
+    const isNewUser = existingUser.rows.length === 0;
+    
+    // Insert new user if they don't exist
+    if (isNewUser) {
+      await client.query(
+        `INSERT INTO users (google_id, name, email, created_at, source)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [googleData.id, googleData.name, googleData.email, new Date(), 'Google']
+      );
+    } 
 
     const jwtToken = jwt.sign(
       {
@@ -59,6 +69,7 @@ export async function googleAuth(req, res) {
     res.json({
       message: "User authenticated",
       success: true,
+      isNewUser, // Flag to indicate if this is a first-time user
       user: {
         name: googleData.name,
         firstName: googleData.given_name,
@@ -70,6 +81,6 @@ export async function googleAuth(req, res) {
     console.error("Auth error:", error);
     res.status(500).json({ message: "Internal Server Error" });
   } finally {
-    client.release(); // This was missing!
+    client.release();
   }
 }

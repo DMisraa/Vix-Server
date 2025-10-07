@@ -28,6 +28,7 @@ import { uploadGuestContacts } from "./Services/database/uploadGuestContacts.js"
 import { deleteGuestUpload } from "./Services/database/deleteGuestUpload.js";
 import { getGuestUploads } from "./Services/database/getGuestUploads.js";
 import { getGuestUploadContacts } from "./Services/database/getGuestUploadContacts.js";
+import { handleContactForm } from "./Services/contactForm.js";
 
 // Import extracted endpoint functions
 import { verifyJwt } from "./Services/auth/verifyJwt.js";
@@ -48,8 +49,8 @@ const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Simple request logging
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+app.use((req, res, next) => {;
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`)
   next();
 });
 
@@ -205,6 +206,19 @@ app.post('/api/contacts/update-tag-name', updateTagName);
 app.post('/api/contacts/remove-tag', removeTag);
 app.post('/api/contacts/tags', getUserTags);
 app.post('/api/contacts/by-tag', getContactsByTag);
+
+// Contact form endpoint
+app.options('/api/contact-form', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.sendStatus(200);
+});
+
+app.post('/api/contact-form', (req, res, next) => {
+  console.log('Contact form endpoint registered and hit!');
+  handleContactForm(req, res, next);
+});
 
 // Initialize WhatsApp listener
 initializeWhatsApp();
