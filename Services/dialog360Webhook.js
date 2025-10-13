@@ -8,35 +8,46 @@
  * - Handles concurrent requests via Promise.all
  * - Marks messages as read (colored ticks)
  * 
+ * ✅ Handles all 3 webhook objects:
+ * - messages: New incoming messages from users
+ * - statuses: Status updates for messages you sent (sent/delivered/read/failed)
+ * - errors: Out-of-band errors from Dialog 360
+ * 
  * Requirements:
  * - HTTPS with valid SSL certificate (deployment)
- * - D360_API_KEY environment variable
+ * - DIALOG360_API environment variable
  */
 export async function handleDialog360Webhook(req, res) {
   try {
-    const { entry } = req.body;
+    // Log incoming webhook for debugging
+    console.log('Dialog 360 webhook received:', JSON.stringify(req.body, null, 2));
 
-    if (!entry || !Array.isArray(entry)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid webhook payload',
-      });
-    }
+    const { entry } = req.body;
 
     // ✅ CRITICAL: Respond immediately within 5-second hard limit
     // Actual response time: <5ms (well under 250ms median requirement)
+    // Always return 200 to prevent Dialog 360 from retrying
     res.status(200).json({ success: true, message: 'Webhook received' });
+
+    // Validate payload after responding
+    if (!entry || !Array.isArray(entry)) {
+      console.warn('Invalid webhook payload - missing or invalid entry array');
+      console.log('Received payload:', req.body);
+      return;
+    }
 
     // ✅ Process asynchronously in background (Dialog 360 best practice)
     processEntriesAsync(entry);
 
   } catch (error) {
     console.error('Error in handleDialog360Webhook:', error);
-    // In case of error before responding
+    console.error('Error details:', error.stack);
+    
+    // Always return 200 to prevent Dialog 360 from retrying
     if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
+      res.status(200).json({
+        success: true,
+        message: 'Webhook received (error logged)',
       });
     }
   }
@@ -73,6 +84,15 @@ async function processEntriesAsync(entry) {
               await Promise.all(
                 value.statuses.map((status) =>
                   processDialog360Status(status, value)
+                )
+              );
+            }
+
+            // Process errors in parallel
+            if (value?.errors && Array.isArray(value.errors)) {
+              await Promise.all(
+                value.errors.map((error) =>
+                  processDialog360Error(error, value)
                 )
               );
             }
@@ -174,13 +194,47 @@ async function processDialog360Status(status, value) {
   }
 }
 
+// Process errors from Dialog 360
+async function processDialog360Error(error, value) {
+  try {
+    const errorCode = error.code;
+    const errorTitle = error.title;
+    const errorMessage = error.message;
+    const errorDetails = error.error_data?.details;
+
+    console.error('Dialog 360 Error received:', {
+      code: errorCode,
+      title: errorTitle,
+      message: errorMessage,
+      details: errorDetails,
+      timestamp: new Date().toISOString()
+    });
+
+    // ✅ Add error handling logic here:
+    // - Log to monitoring system (e.g., Sentry)
+    // - Save to database for tracking
+    // - Send alerts for critical errors
+    // - Update message status in DB if related to specific message
+
+    // Common error codes to handle:
+    // - 130472: User's number is part of an experiment (no action needed)
+    // - 131026: Message undeliverable
+    // - 131047: Re-engagement message
+    // - 131051: Unsupported message type
+    // - etc.
+
+  } catch (err) {
+    console.error('Error processing Dialog 360 error notification:', err);
+  }
+}
+
 // Mark message as read (shows colored ticks to sender)
 async function markMessageAsRead(messageId, phoneNumber) {
   try {
-    const apiKey = process.env.D360_API_KEY;
+    const apiKey = process.env.DIALOG360_API;
     
     if (!apiKey) {
-      console.error('D360_API_KEY key not configured');
+      console.error('DIALOG360_API key not configured');
       return;
     }
 
