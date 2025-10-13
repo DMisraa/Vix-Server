@@ -29,6 +29,7 @@ import { deleteGuestUpload } from "./Services/database/deleteGuestUpload.js";
 import { getGuestUploads } from "./Services/database/getGuestUploads.js";
 import { getGuestUploadContacts } from "./Services/database/getGuestUploadContacts.js";
 import { handleContactForm } from "./Services/contactForm.js";
+import { handleDialog360Webhook } from "./Services/dialog360Webhook.js";
 
 // Import extracted endpoint functions
 import { verifyJwt } from "./Services/auth/verifyJwt.js";
@@ -36,6 +37,7 @@ import { validateInvitation } from "./Services/auth/validateInvitation.js";
 import { createInvitation } from "./Services/auth/createInvitation.js";
 import { logout } from "./Services/auth/logout.js";
 import { refreshToken } from "./Services/auth/refreshToken.js";
+import { verifyEmail } from "./Services/auth/verifyEmail.js";
 import { googleContacts } from "./Services/contacts/googleContacts.js";
 import { googleContactsFetch } from "./Services/contacts/googleContactsFetch.js";
 import { excelContacts } from "./Services/contacts/excelContacts.js";
@@ -141,6 +143,7 @@ app.post("/contacts/by-owner", getContactsByOwner)
 app.post("/contacts/by-event-with-tags", getContactsByEventWithTags)
 
 app.post("/signup", signup)
+app.post("/verify-email", verifyEmail)
 
 app.post("/login", login)
 
@@ -219,6 +222,9 @@ app.post('/api/contact-form', (req, res, next) => {
   console.log('Contact form endpoint registered and hit!');
   handleContactForm(req, res, next);
 });
+
+// Dialog 360 webhook endpoint
+app.post('/api/dialog360/webhook', handleDialog360Webhook);
 
 // Initialize WhatsApp listener
 initializeWhatsApp();

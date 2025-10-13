@@ -33,9 +33,9 @@ export async function googleAuth(req, res) {
     // Insert new user if they don't exist
     if (isNewUser) {
       await client.query(
-        `INSERT INTO users (google_id, name, email, created_at, source)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [googleData.id, googleData.name, googleData.email, new Date(), 'Google']
+        `INSERT INTO users (google_id, name, email, created_at, source, email_verified)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [googleData.id, googleData.name, googleData.email, new Date(), 'Google', true]
       );
     } 
 

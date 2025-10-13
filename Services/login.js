@@ -12,7 +12,7 @@ export async function login(req, res) {
   try {
     const client = await pool.connect();
     const result = await client.query(
-      `SELECT id, name, email, password FROM users WHERE email = $1`,
+      `SELECT id, name, email, password, email_verified FROM users WHERE email = $1`,
       [email]
     );
 
@@ -28,6 +28,15 @@ export async function login(req, res) {
     if (!isPasswordValid) {
       client.release();
       return res.status(401).json({ error: "אימייל או סיסמה שגויים." });
+    }
+
+    // Check if email is verified (only for manual signup, not Google)
+    if (user.email_verified === false) {
+      client.release();
+      return res.status(403).json({ 
+        error: "אנא אמתו את האימייל שלכם לפני ההתחברות. בדקו את תיבת הדואר הנכנס.",
+        requiresVerification: true 
+      });
     }
 
     // Detect iOS device
