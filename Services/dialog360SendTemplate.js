@@ -2,10 +2,12 @@ import pool from '../db/db.js';
 import { getTemplateConfiguration } from './templates/templateConfigurations.js';
 
 /**
- * Dialog 360 Template Message Sender
+ * Dialog 360 Template Message Sender (v2 API)
  * 
  * Sends WhatsApp template messages with event invitation images
- * Uses Dialog 360 Cloud API to send pre-approved templates
+ * Uses Dialog 360 v2 API (waba-v2.360dialog.io) to send pre-approved templates
+ * 
+ * IMPORTANT: This service uses the v2 API which requires parameter_name field for named variables
  * 
  * DATA STRUCTURE REFERENCE:
  * ========================
@@ -116,8 +118,9 @@ export async function sendTemplateMessage(params) {
       }
     };
 
-    // Add header component with image if provided
-    if (imageUrl) {
+    // Skip header component - template "first_event_invitation" doesn't have a header
+    // Note: Dialog360 v2 API requires exact match between template structure and payload
+    if (false && imageUrl) { // Disabled since template has no header component
       payload.template.components.push({
         type: 'header',
         parameters: [
@@ -135,41 +138,46 @@ export async function sendTemplateMessage(params) {
     if (templateData) {
       const bodyParameters = [];
 
-      // Add template variables in order
+      // Add template variables in order with parameter names for Dialog360 v2 API
       if (templateData.guestName) {
         bodyParameters.push({
           type: 'text',
-          text: templateData.guestName
+          text: templateData.guestName,
+          parameter_name: 'guest_name'
         });
       }
 
       if (templateData.eventName) {
         bodyParameters.push({
           type: 'text',
-          text: templateData.eventName
+          text: templateData.eventName,
+          parameter_name: 'variable_1'
         });
       }
 
       if (templateData.eventDate) {
         bodyParameters.push({
           type: 'text',
-          text: templateData.eventDate
+          text: templateData.eventDate,
+          parameter_name: 'variable_2'
         });
       }
 
       if (templateData.eventLocation) {
         bodyParameters.push({
           type: 'text',
-          text: templateData.eventLocation
+          text: templateData.eventLocation,
+          parameter_name: 'variable_3'
         });
       }
 
-      // Add any additional custom parameters
+      // Add any additional custom parameters with sequential variable names
       if (templateData.customParams && Array.isArray(templateData.customParams)) {
-        templateData.customParams.forEach(param => {
+        templateData.customParams.forEach((param, index) => {
           bodyParameters.push({
             type: 'text',
-            text: param
+            text: param,
+            parameter_name: `variable_${index + 4}` // Start from variable_4
           });
         });
       }
@@ -204,7 +212,7 @@ export async function sendTemplateMessage(params) {
     console.log('Payload:', JSON.stringify(payload, null, 2));
 
     // Send message via Dialog 360 API
-    const response = await fetch('https://waba.360dialog.io/v1/messages', {
+    const response = await fetch('https://waba-v2.360dialog.io/messages', {
       method: 'POST',
       headers: {
         'D360-API-KEY': apiKey,
@@ -222,8 +230,19 @@ export async function sendTemplateMessage(params) {
       console.error('Phone number:', phoneNumber);
       console.error('Full payload sent:', JSON.stringify(payload, null, 2));
       
-      // Provide helpful error messages
-      if (result.meta?.http_code === 555) {
+      // Provide helpful error messages for different error types
+      if (result.error?.code === 100) {
+        console.error('⚠️  Error 100 (Invalid parameter) usually means:');
+        console.error('   1. Parameter structure mismatch with Dialog360 v2 API');
+        console.error('   2. Template expects different parameter format');
+        console.error('   3. Missing required fields in parameter objects');
+        console.error('   4. Parameter count mismatch with template');
+        console.error('   Details:', result.error?.error_data?.details || 'No details provided');
+      } else if (result.error?.code === 132000) {
+        console.error('⚠️  Error 132000 (Parameter count mismatch):');
+        console.error('   Template expects different number of parameters');
+        console.error('   Details:', result.error?.error_data?.details || 'No details provided');
+      } else if (result.meta?.http_code === 555) {
         console.error('⚠️  Error 555 usually means:');
         console.error('   1. Template "' + templateName + '" does not exist in Dialog360');
         console.error('   2. Template is not approved (check Dialog360 dashboard)');
