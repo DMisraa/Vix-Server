@@ -30,6 +30,7 @@ import { getGuestUploads } from "./Services/database/getGuestUploads.js";
 import { getGuestUploadContacts } from "./Services/database/getGuestUploadContacts.js";
 import { handleContactForm } from "./Services/contactForm.js";
 import { handleDialog360Webhook } from "./Services/dialog360Webhook.js";
+import { handleSendTemplate } from "./Services/dialog360SendTemplate.js";
 
 // Import extracted endpoint functions
 import { verifyJwt } from "./Services/auth/verifyJwt.js";
@@ -233,6 +234,9 @@ app.post('/api/contact-form', (req, res, next) => {
 
 // Dialog 360 webhook endpoint
 app.post('/api/dialog360/webhook', handleDialog360Webhook);
+
+// Dialog 360 send template message endpoint
+app.post('/api/dialog360/send-template', handleSendTemplate);
 
 // Initialize WhatsApp listener
 initializeWhatsApp();

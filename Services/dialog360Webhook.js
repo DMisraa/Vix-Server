@@ -15,7 +15,7 @@
  * 
  * Requirements:
  * - HTTPS with valid SSL certificate (deployment)
- * - DIALOG360_API environment variable
+ * - D360_API_KEY environment variable
  */
 export async function handleDialog360Webhook(req, res) {
   try {
@@ -231,10 +231,10 @@ async function processDialog360Error(error, value) {
 // Mark message as read (shows colored ticks to sender)
 async function markMessageAsRead(messageId, phoneNumber) {
   try {
-    const apiKey = process.env.DIALOG360_API;
+    const apiKey = process.env.D360_API_KEY;
     
     if (!apiKey) {
-      console.error('DIALOG360_API key not configured');
+      console.error('D360_API_KEY not configured');
       return;
     }
 
