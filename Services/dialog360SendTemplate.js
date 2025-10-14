@@ -1,4 +1,5 @@
 import pool from '../db/db.js';
+import { getTemplateConfiguration } from './templates/templateConfigurations.js';
 
 /**
  * Dialog 360 Template Message Sender
@@ -25,11 +26,13 @@ import pool from '../db/db.js';
  * Contact Structure (from database):
  * - id: integer
  * - display_name: string (contact's display name)
- * - canonical_form: string (normalized phone number)
- * - phone_number: string (with country code, e.g., "972501234567")
+ * - canonical_form: string (contact's full name - NOT the phone number)
+ * - phone_number: string (local or international format, e.g., "0544349661" or "972544349661")
  * - contact_owner: string (email of the user who owns this contact)
  * - contact_source: string
  * - tags: array
+ * 
+ * NOTE: phone_number will be auto-normalized to international format for Dialog360
  * 
  * Request Body Format:
  * {
@@ -213,8 +216,22 @@ export async function sendTemplateMessage(params) {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error('Dialog 360 API error:', result);
-      throw new Error(result.message || 'Failed to send template message');
+      console.error('❌ Dialog 360 API error:', result);
+      console.error('Template name:', templateName);
+      console.error('Language code:', languageCode);
+      console.error('Phone number:', phoneNumber);
+      console.error('Full payload sent:', JSON.stringify(payload, null, 2));
+      
+      // Provide helpful error messages
+      if (result.meta?.http_code === 555) {
+        console.error('⚠️  Error 555 usually means:');
+        console.error('   1. Template "' + templateName + '" does not exist in Dialog360');
+        console.error('   2. Template is not approved (check Dialog360 dashboard)');
+        console.error('   3. Template parameters do not match (we sent ' + (templateData ? 'with data' : 'no data') + ')');
+        console.error('   4. Language code "' + languageCode + '" does not match template language');
+      }
+      
+      throw new Error(result.message || result.meta?.developer_message || 'Failed to send template message');
     }
 
     console.log('Template message sent successfully:', result);
@@ -256,11 +273,11 @@ export async function sendBatchTemplateMessages(recipients, templateName, langua
           templateName,
           languageCode,
           templateData: {
-            guestName: recipient.name,
-            eventName: recipient.eventName,
-            eventDate: recipient.eventDate,
-            eventLocation: recipient.eventLocation,
-            customParams: recipient.customParams
+            // guestName: recipient.name,  // Not needed for this template
+            eventName: recipient.eventName,        // Variable 1: Event type
+            eventDate: recipient.eventDate,        // Variable 2: Celebrators
+            eventLocation: recipient.eventLocation, // Variable 3: Day of week
+            customParams: recipient.customParams   // Variables 4-6: Date, Location, Time
           },
           imageUrl,
           buttons
@@ -302,7 +319,7 @@ export async function handleSendTemplate(req, res) {
       eventId,
       contactIds, // Array of contact IDs to send to
       userEmail, // User email for validation
-      templateName = 'event_invitation',
+      templateName = 'first_event_invitation', // Default to existing approved template
       languageCode = 'he',
       buttons
     } = req.body;
@@ -368,17 +385,6 @@ export async function handleSendTemplate(req, res) {
       });
     }
 
-    // Format event date for display
-    const formatEventDate = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      return date.toLocaleDateString('he-IL', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric' 
-      });
-    };
-
     // Normalize phone number to international format for Dialog360
     const normalizePhoneForDialog360 = (phoneNumber) => {
       if (!phoneNumber) return null;
@@ -402,22 +408,37 @@ export async function handleSendTemplate(req, res) {
 
     // Prepare recipients with personalized event data
     const recipients = contacts.map(contact => {
-      // Use canonical_form first (already normalized), fallback to phone_number
-      const rawPhone = contact.canonical_form || contact.phone_number;
+      // Use phone_number directly (canonical_form is the contact name, not phone)
+      const rawPhone = contact.phone_number;
       const normalizedPhone = normalizePhoneForDialog360(rawPhone);
+      
+      console.log('📞 Phone normalization:', {
+        contactId: contact.id,
+        displayName: contact.display_name,
+        phoneNumber: contact.phone_number,
+        normalizedPhone: normalizedPhone
+      });
+      
+      // Get template-specific configuration
+      const templateConfig = getTemplateConfiguration(templateName, event, contact);
       
       return {
         phoneNumber: normalizedPhone,
-        name: contact.display_name || contact.canonical_form || 'Guest',
-        eventName: event.event_name,
-        eventDate: formatEventDate(event.event_date),
-        eventLocation: event.location || event.venue_name || '',
-        customParams: [
-          event.event_time || '',
-          event.venue_name || ''
-        ].filter(Boolean)
+        name: contact.display_name || contact.canonical_form || 'אורח',
+        ...templateConfig // Spread template configuration (eventName, eventDate, eventLocation, customParams)
       };
     }).filter(r => r.phoneNumber); // Filter out contacts without valid phone numbers
+
+    console.log(`📊 Recipients prepared: ${recipients.length} out of ${contacts.length} contacts`);
+    
+    // Validate we have recipients
+    if (recipients.length === 0) {
+      console.error('❌ No valid recipients after phone normalization');
+      return res.status(400).json({
+        success: false,
+        message: 'No valid phone numbers found for selected contacts'
+      });
+    }
 
     // Send batch messages
     // Only use buttons if explicitly provided - not all templates have buttons
