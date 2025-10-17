@@ -7,7 +7,7 @@
  * Free-text messages are NOT processed here (except guest count which is handled separately)
  * 
  * Expected invitation button responses:
- * - "כן, אני מגיע!" → מגיע (Attending)
+ * - "כן, אני מגיע!" or "כן, אני אגיע!" → מגיע (Attending)
  * - "לצערי, לא" → לא מגיע (Not Attending)
  * - "עדיין לא יודע\ת" → לא בטוח (Maybe/Uncertain)
  */
@@ -33,8 +33,8 @@ export function mapInvitationButtonResponse(buttonText, messageType) {
   // Remove common punctuation for flexible matching
   const cleanText = normalizedText.replace(/[!.,?]/g, '').trim();
   
-  // Match Button 1: "כן, אני מגיע!" → Attending
-  if (cleanText.includes('כן') && cleanText.includes('אני') && cleanText.includes('מגיע')) {
+  // Match Button 1: "כן, אני מגיע!" or "כן, אני אגיע!" → Attending
+  if (cleanText.includes('כן') && cleanText.includes('אני') && (cleanText.includes('מגיע') || cleanText.includes('אגיע'))) {
     console.log(`✅ Button matched: Attending (מגיע)`);
     return 'מגיע';
   }
