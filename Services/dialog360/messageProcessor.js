@@ -225,7 +225,7 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
          WHERE event_id = $1 
          AND contact_id = $2 
          AND message_type = 'invitation' 
-         AND response = 'ממתין לתגובה'
+         AND response IN ('ממתין לתגובה', 'ללא מענה')
          ORDER BY id DESC 
          LIMIT 1`,
         [eventId, contactId]

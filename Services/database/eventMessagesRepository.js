@@ -126,7 +126,7 @@ export async function findPendingInvitation(contactId) {
       `SELECT event_id, id FROM event_messages 
        WHERE contact_id = $1 
        AND message_type = 'invitation' 
-       AND response = 'ממתין לתגובה'
+       AND response IN ('ממתין לתגובה', 'ללא מענה')
        ORDER BY id DESC 
        LIMIT 1`,
       [contactId]
