@@ -231,26 +231,105 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
           eventMessageId = eventMessageResult.rows[0].id;
           console.log(`✅ Found event_message_id ${eventMessageId} for event ${eventId} + contact ${contactId}`);
         } else {
-          console.warn(`⚠️  No pending invitation found for event ${eventId} + contact ${contactId} - falling back to search`);
-          eventId = null; // Reset to trigger fallback logic
+          // No pending invitation found - get event and contact details for debugging
+          const eventDetailsResult = await client.query(
+            'SELECT owner_email, event_name FROM events WHERE id = $1',
+            [eventId]
+          );
+          
+          const contactDetailsResult = await client.query(
+            'SELECT display_name FROM contacts WHERE id = $1',
+            [contactId]
+          );
+          
+          const ownerEmail = eventDetailsResult.rows.length > 0 ? eventDetailsResult.rows[0].owner_email : 'unknown';
+          const eventName = eventDetailsResult.rows.length > 0 ? eventDetailsResult.rows[0].event_name : 'unknown';
+          const contactName = contactDetailsResult.rows.length > 0 ? contactDetailsResult.rows[0].display_name : 'unknown';
+          
+          // Try to find ANY invitation for this event+contact
+          const anyInvitationResult = await client.query(
+            `SELECT id FROM event_messages 
+             WHERE event_id = $1 
+             AND contact_id = $2 
+             AND message_type = 'invitation'
+             ORDER BY id DESC 
+             LIMIT 1`,
+            [eventId, contactId]
+          );
+          
+          const errorMsg = `[DEBUG] No pending invitation found. Event: ${eventName} (${eventId}) | Owner: ${ownerEmail} | Contact: ${contactName} (ID: ${contactId}) | Phone: ${phoneNumber} | Payload: ${payload} | Response may have already been recorded.`;
+          console.error(`❌ ${errorMsg}`);
+          
+          if (anyInvitationResult.rows.length > 0) {
+            // Found an invitation - update it with error
+            await client.query(
+              `UPDATE event_messages 
+               SET error_message = $1 
+               WHERE id = $2`,
+              [errorMsg, anyInvitationResult.rows[0].id]
+            );
+            console.log(`📝 Error saved to existing invitation record (id: ${anyInvitationResult.rows[0].id})`);
+          } else {
+            // No invitation record exists at all - create error record
+            await client.query(
+              `INSERT INTO event_messages (
+                event_id, contact_id, message_type, response, error_message
+              ) VALUES ($1, $2, $3, $4, $5)`,
+              [eventId, contactId, 'error', 'שגיאה', errorMsg]
+            );
+            console.log(`📝 Error saved as new record (no invitation found)`);
+          }
+          
+          await client.query('COMMIT');
+          return;
         }
       }
     }
     
-    // Fallback: If no valid payload, search for pending invitation (old logic for backward compatibility)
+    // If no payload provided, cannot process safely
     if (!eventMessageId) {
-      console.log(`ℹ️  No payload or no match found - searching for any pending invitation`);
-      const pendingMessage = await findPendingInvitation(contactId);
+      // Get contact details for debugging
+      const contactDetailsResult = await client.query(
+        'SELECT display_name FROM contacts WHERE id = $1',
+        [contactId]
+      );
       
-      if (!pendingMessage) {
-        console.warn(`⚠️  No pending invitation found for contact ID: ${contactId}`);
-        await client.query('ROLLBACK');
-        return;
+      const contactName = contactDetailsResult.rows.length > 0 ? contactDetailsResult.rows[0].display_name : 'unknown';
+      
+      // Try to find most recent invitation for this contact to attach error
+      const recentInvitationResult = await client.query(
+        `SELECT em.id, em.event_id, e.event_name, e.owner_email 
+         FROM event_messages em
+         LEFT JOIN events e ON em.event_id = e.id
+         WHERE em.contact_id = $1 
+         AND em.message_type = 'invitation'
+         ORDER BY em.id DESC 
+         LIMIT 1`,
+        [contactId]
+      );
+      
+      if (recentInvitationResult.rows.length > 0) {
+        const row = recentInvitationResult.rows[0];
+        const errorMsg = `[DEBUG] No payload in message. Event: ${row.event_name || 'unknown'} (${row.event_id || 'unknown'}) | Owner: ${row.owner_email || 'unknown'} | Contact: ${contactName} (ID: ${contactId}) | Phone: ${phoneNumber} | Message type: ${messageType}`;
+        console.error(`❌ ${errorMsg}`);
+        
+        // Update most recent invitation with error
+        await client.query(
+          `UPDATE event_messages 
+           SET error_message = $1 
+           WHERE id = $2`,
+          [errorMsg, row.id]
+        );
+        console.log(`📝 Error saved to recent invitation record (id: ${row.id})`);
+      } else {
+        // No invitation found at all
+        const errorMsg = `[DEBUG] No payload in message. Contact: ${contactName} (ID: ${contactId}) | Phone: ${phoneNumber} | Message type: ${messageType} | No invitation found for this contact`;
+        console.error(`❌ ${errorMsg}`);
+        console.log(`📝 No invitation found for contact ${contactId} - skipping error log`);
       }
       
-      eventMessageId = pendingMessage.id;
-      eventId = pendingMessage.event_id;
-      console.log(`⚠️  Using fallback search - found event_message_id ${eventMessageId}`);
+      await client.query('COMMIT');
+      return;
     }
     
     // Map invitation button to Hebrew response types (only processes quick reply buttons)
