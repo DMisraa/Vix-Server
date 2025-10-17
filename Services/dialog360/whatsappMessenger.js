@@ -181,3 +181,124 @@ export async function sendGuestCountConfirmation(phoneNumber, guestCount) {
   }
 }
 
+/**
+ * Send decline confirmation message
+ * 
+ * @param {string} phoneNumber - Phone number to send to
+ */
+export async function sendDeclineConfirmation(phoneNumber) {
+  try {
+    const apiKey = process.env.D360_API_KEY;
+    
+    if (!apiKey) {
+      console.error('D360_API_KEY not configured');
+      return;
+    }
+    
+    const messageText = 'תודה על עדכון! נשמח לראותך באירועים הבאים 💙';
+    
+    console.log(`📤 Sending decline confirmation to ${phoneNumber}`);
+    
+    const response = await fetch('https://waba-v2.360dialog.io/messages', {
+      method: 'POST',
+      headers: {
+        'D360-API-KEY': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: phoneNumber,
+        type: 'text',
+        text: {
+          body: messageText
+        }
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(`Failed to send decline confirmation: ${error}`);
+    } else {
+      console.log(`✅ Decline confirmation sent to ${phoneNumber}`);
+    }
+    
+  } catch (error) {
+    console.error('Error sending decline confirmation:', error);
+  }
+}
+
+/**
+ * Send maybe confirmation message with follow-up buttons
+ * 
+ * @param {string} phoneNumber - Phone number to send to
+ */
+export async function sendMaybeConfirmation(phoneNumber) {
+  try {
+    const apiKey = process.env.D360_API_KEY;
+    
+    if (!apiKey) {
+      console.error('D360_API_KEY not configured');
+      return;
+    }
+    
+    console.log(`📤 Sending maybe confirmation with follow-up buttons to ${phoneNumber}`);
+    
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: phoneNumber,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: {
+          text: 'בסדר גמור! 😊\n\nמתי נוכל לבדוק איתך שוב?'
+        },
+        action: {
+          buttons: [
+            {
+              type: 'reply',
+              reply: {
+                id: 'followup_3days',
+                title: 'בעוד 3 ימים'
+              }
+            },
+            {
+              type: 'reply',
+              reply: {
+                id: 'followup_week',
+                title: 'בעוד שבוע'
+              }
+            },
+            {
+              type: 'reply',
+              reply: {
+                id: 'followup_2weeks',
+                title: 'בעוד שבועיים'
+              }
+            }
+          ]
+        }
+      }
+    };
+    
+    const response = await fetch('https://waba-v2.360dialog.io/messages', {
+      method: 'POST',
+      headers: {
+        'D360-API-KEY': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(`Failed to send maybe confirmation: ${error}`);
+    } else {
+      console.log(`✅ Maybe confirmation with buttons sent to ${phoneNumber}`);
+    }
+    
+  } catch (error) {
+    console.error('Error sending maybe confirmation:', error);
+  }
+}
+

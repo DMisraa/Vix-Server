@@ -7,7 +7,7 @@ import {
   setAwaitingGuestCount
 } from '../database/eventMessagesRepository.js';
 import { mapInvitationButtonResponse } from './responseMapper.js';
-import { sendGuestCountQuestion, markMessageAsRead } from './whatsappMessenger.js';
+import { sendGuestCountQuestion, markMessageAsRead, sendDeclineConfirmation, sendMaybeConfirmation } from './whatsappMessenger.js';
 import { handleGuestCountReply } from './guestCountHandler.js';
 
 /**
@@ -284,6 +284,77 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
       }
     }
     
+    // Check if this is a follow-up timeframe button (for "maybe" responses)
+    if (payload && payload.startsWith('followup_')) {
+      console.log(`📅 Follow-up button clicked: ${payload}`);
+      
+      // Find the most recent "לא בטוח" (maybe) invitation for this contact
+      const maybeInvitationResult = await client.query(
+        `SELECT id FROM event_messages 
+         WHERE contact_id = $1 
+         AND message_type = 'invitation' 
+         AND response = 'לא בטוח'
+         ORDER BY id DESC 
+         LIMIT 1`,
+        [contactId]
+      );
+      
+      if (maybeInvitationResult.rows.length > 0) {
+        const eventMessageId = maybeInvitationResult.rows[0].id;
+        
+        // Calculate follow-up date based on button clicked
+        const today = new Date();
+        let followupDate;
+        let followupText;
+        
+        if (payload === 'followup_3days') {
+          followupDate = new Date(today.setDate(today.getDate() + 3));
+          followupText = 'בעוד 3 ימים';
+        } else if (payload === 'followup_week') {
+          followupDate = new Date(today.setDate(today.getDate() + 7));
+          followupText = 'בעוד שבוע';
+        } else if (payload === 'followup_2weeks') {
+          followupDate = new Date(today.setDate(today.getDate() + 14));
+          followupText = 'בעוד שבועיים';
+        }
+        
+        // Store follow-up date in database
+        await client.query(
+          `UPDATE event_messages 
+           SET followup_date = $1 
+           WHERE id = $2`,
+          [followupDate.toISOString().split('T')[0], eventMessageId]
+        );
+        
+        console.log(`✅ Follow-up date set for contact ${contactId}: ${followupDate.toISOString().split('T')[0]}`);
+        
+        // Send confirmation
+        await client.query('COMMIT');
+        
+        const confirmationText = `תודה! נחזור אליך ${followupText} ✅`;
+        await fetch('https://waba-v2.360dialog.io/messages', {
+          method: 'POST',
+          headers: {
+            'D360-API-KEY': process.env.D360_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: phoneNumber,
+            type: 'text',
+            text: { body: confirmationText }
+          }),
+        });
+        
+        console.log(`✅ Follow-up confirmation sent to ${phoneNumber}`);
+      } else {
+        console.warn(`⚠️  No "maybe" invitation found for contact ${contactId}`);
+        await client.query('ROLLBACK');
+      }
+      
+      return;
+    }
+    
     // If no payload provided, cannot process safely
     if (!eventMessageId) {
       // Get contact details for debugging
@@ -345,22 +416,22 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     // Update the event_messages record with the response
     await updateMessageResponse(eventMessageId, mappedResponse, responseTime);
     
-    // If it's an approval response, ask for guest count
+    await client.query('COMMIT');
+    console.log(`✅ Updated response for contact ${contactId} in event ${eventId}: ${mappedResponse}`);
+    
+    // Send appropriate follow-up message based on response type
     if (mappedResponse === 'מגיע') {
-      // Set awaiting_guest_count flag
+      // Attending - Set awaiting_guest_count flag and ask for guest count
       await setAwaitingGuestCount(eventMessageId);
-      
-      await client.query('COMMIT');
-      
-      console.log(`✅ Updated response for contact ${contactId} in event ${eventId}: ${mappedResponse}`);
-      
-      // Send follow-up message asking for guest count
       await sendGuestCountQuestion(phoneNumber);
       
-    } else {
-      // For non-approval responses, just commit
-      await client.query('COMMIT');
-      console.log(`✅ Updated response for contact ${contactId} in event ${eventId}: ${mappedResponse}`);
+    } else if (mappedResponse === 'לא מגיע') {
+      // Not attending - Send decline confirmation
+      await sendDeclineConfirmation(phoneNumber);
+      
+    } else if (mappedResponse === 'לא בטוח') {
+      // Maybe - Send maybe confirmation
+      await sendMaybeConfirmation(phoneNumber);
     }
     
   } catch (error) {
