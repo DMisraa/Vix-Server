@@ -32,21 +32,47 @@ function normalizePhoneNumberFormats(phoneNumber) {
 }
 
 /**
- * Find contact by phone number
+ * Find contact by phone number and event context
  * Handles both international (972544349661) and local (0544349661) formats
+ * Uses event_id to find the correct contact when duplicates exist
  * 
  * @param {string} phoneNumber - Phone number in any format
+ * @param {string} eventId - Event ID to find the correct contact (required for duplicate handling)
  * @returns {Promise<Object|null>} Contact object or null
  */
-export async function findContactByPhoneNumber(phoneNumber) {
+export async function findContactByPhoneNumber(phoneNumber, eventId = null) {
   const client = await pool.connect();
   try {
     // Get all possible formats for this phone number
     const phoneFormats = normalizePhoneNumberFormats(phoneNumber);
     
-    // Query with both formats
+    // If eventId provided, find contact that has invitation for this event
+    // This handles duplicate phone numbers across different users
+    if (eventId) {
+      const result = await client.query(
+        `SELECT DISTINCT c.id 
+         FROM contacts c
+         INNER JOIN event_messages em ON c.id = em.contact_id
+         WHERE c.phone_number = ANY($1::text[])
+         AND em.event_id = $2
+         AND em.message_type = 'invitation'
+         ORDER BY c.id DESC
+         LIMIT 1`,
+        [phoneFormats, eventId]
+      );
+      
+      if (result.rows.length > 0) {
+        console.log(`✅ Found contact for phone: ${phoneNumber} with invitation for event ${eventId} (matched: ${result.rows[0].id})`);
+        return result.rows[0];
+      }
+      
+      console.log(`⚠️  No contact found with invitation for event ${eventId} and phone ${phoneNumber}`);
+      return null;
+    }
+    
+    // Fallback: If no eventId provided, just find by phone (for backwards compatibility)
     const result = await client.query(
-      'SELECT id FROM contacts WHERE phone_number = ANY($1::text[])',
+      'SELECT id FROM contacts WHERE phone_number = ANY($1::text[]) ORDER BY id DESC LIMIT 1',
       [phoneFormats]
     );
     
