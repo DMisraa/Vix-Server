@@ -222,6 +222,10 @@ export async function sendTemplateMessage(params) {
     });
 
     const result = await response.json();
+    
+    // Log the complete response for debugging
+    console.log('📡 Dialog360 API Response Status:', response.status);
+    console.log('📡 Dialog360 API Response:', JSON.stringify(result, null, 2));
 
     if (!response.ok) {
       console.error('❌ Dialog 360 API error:', result);
@@ -230,7 +234,12 @@ export async function sendTemplateMessage(params) {
       console.error('Phone number:', phoneNumber);
       console.error('Full payload sent:', JSON.stringify(payload, null, 2));
       
+      // Log the complete error response for debugging
+      console.error('🔍 Complete error response:', JSON.stringify(result, null, 2));
+      
       // Provide helpful error messages for different error types
+      let userFriendlyMessage = 'Failed to send template message';
+      
       if (result.error?.code === 100) {
         console.error('⚠️  Error 100 (Invalid parameter) usually means:');
         console.error('   1. Parameter structure mismatch with Dialog360 v2 API');
@@ -238,19 +247,39 @@ export async function sendTemplateMessage(params) {
         console.error('   3. Missing required fields in parameter objects');
         console.error('   4. Parameter count mismatch with template');
         console.error('   Details:', result.error?.error_data?.details || 'No details provided');
+        userFriendlyMessage = 'פרמטר לא תקין - יתכן שהמספר אינו רשום בוואטסאפ';
+      } else if (result.error?.code === 131026) {
+        console.error('⚠️  Error 131026: User not registered on WhatsApp');
+        userFriendlyMessage = 'המספר אינו רשום בוואטסאפ - המשתמש צריך להתקין את האפליקציה';
+      } else if (result.error?.code === 131021) {
+        console.error('⚠️  Error 131021: User blocked the business');
+        userFriendlyMessage = 'המשתמש חסם את ההודעות מהעסק';
+      } else if (result.error?.code === 190) {
+        console.error('⚠️  Error 190: Rate limit exceeded');
+        userFriendlyMessage = 'חריגה ממכסת הודעות - נסה שוב מאוחר יותר';
       } else if (result.error?.code === 132000) {
         console.error('⚠️  Error 132000 (Parameter count mismatch):');
         console.error('   Template expects different number of parameters');
         console.error('   Details:', result.error?.error_data?.details || 'No details provided');
+        userFriendlyMessage = 'פרמטרים לא תואמים לתבנית ההודעה';
       } else if (result.meta?.http_code === 555) {
         console.error('⚠️  Error 555 usually means:');
         console.error('   1. Template "' + templateName + '" does not exist in Dialog360');
         console.error('   2. Template is not approved (check Dialog360 dashboard)');
         console.error('   3. Template parameters do not match (we sent ' + (templateData ? 'with data' : 'no data') + ')');
         console.error('   4. Language code "' + languageCode + '" does not match template language');
+        userFriendlyMessage = 'תבנית ההודעה לא נמצאה או לא אושרה';
+      } else if (result.error?.code === 131047) {
+        console.error('⚠️  Error 131047: Message undeliverable');
+        userFriendlyMessage = 'לא ניתן למסור את ההודעה - בדוק את מספר הטלפון';
+      } else if (result.error?.code === 131051) {
+        console.error('⚠️  Error 131051: Re-engagement message');
+        userFriendlyMessage = 'המשתמש לא פתח את ההודעה במשך 24 שעות - נסה שוב מאוחר יותר';
       }
       
-      throw new Error(result.message || result.meta?.developer_message || 'Failed to send template message');
+      console.error('📝 Final error message:', userFriendlyMessage);
+      
+      throw new Error(userFriendlyMessage);
     }
 
     console.log('Template message sent successfully:', result);
@@ -267,22 +296,48 @@ export async function sendTemplateMessage(params) {
 }
 
 /**
+ * Generate RSVP buttons with event_id in payload
+ * 
+ * @param {string} eventId - Event ID to encode in button payload
+ * @returns {Array} Array of button configurations
+ */
+function generateRSVPButtons(eventId) {
+  return [
+    {
+      id: 'rsvp_yes',
+      payload: `rsvp_yes_${eventId}`
+    },
+    {
+      id: 'rsvp_no',
+      payload: `rsvp_no_${eventId}`
+    },
+    {
+      id: 'rsvp_maybe',
+      payload: `rsvp_maybe_${eventId}`
+    }
+  ];
+}
+
+/**
  * Send template messages to multiple recipients (batch sending)
  * 
  * @param {Array} recipients - Array of recipient objects
  * @param {string} templateName - Template name
  * @param {string} languageCode - Language code
  * @param {string} imageUrl - Event image URL
- * @param {Array} buttons - RSVP buttons
+ * @param {string} eventId - Event ID to encode in button payloads
  * @returns {Promise<Object>} Batch send results
  */
-export async function sendBatchTemplateMessages(recipients, templateName, languageCode, imageUrl, buttons) {
+export async function sendBatchTemplateMessages(recipients, templateName, languageCode, imageUrl, eventId) {
   try {
     const results = {
       success: [],
       failed: [],
       total: recipients.length
     };
+
+    // Generate RSVP buttons with event_id in payload (same for all recipients)
+    const rsvpButtons = generateRSVPButtons(eventId);
 
     // Send messages with delay to avoid rate limiting
     for (const recipient of recipients) {
@@ -299,7 +354,7 @@ export async function sendBatchTemplateMessages(recipients, templateName, langua
             customParams: recipient.customParams   // Variables 4-6: Date, Location, Time
           },
           imageUrl,
-          buttons
+          buttons: rsvpButtons // All recipients get same buttons with event_id
         });
 
         results.success.push({
@@ -459,14 +514,13 @@ export async function handleSendTemplate(req, res) {
       });
     }
 
-    // Send batch messages
-    // Only use buttons if explicitly provided - not all templates have buttons
+    // Send batch messages with event_id in button payloads
     const results = await sendBatchTemplateMessages(
       recipients,
       templateName,
       languageCode,
       event.image_url, // Cloudinary URL from database
-      buttons // Will be undefined/empty if not provided, which is correct
+      eventId // Pass event_id for button payloads
     );
 
     // Log successful sends to database
@@ -475,7 +529,11 @@ export async function handleSendTemplate(req, res) {
       await client.query('BEGIN');
       
       for (const success of results.success) {
-        const contact = contacts.find(c => c.phone_number === success.phoneNumber);
+        const contact = contacts.find(c => {
+          const normalized = normalizePhoneForDialog360(c.phone_number);
+          return normalized === success.phoneNumber;
+        });
+        
         if (contact) {
           // Check if already logged
           const existing = await client.query(
@@ -509,6 +567,8 @@ export async function handleSendTemplate(req, res) {
         sent: results.success.length,
         failed: results.failed.length,
         total: results.total,
+        successList: results.success, // Array of successful sends with details
+        failedList: results.failed,   // Array of failed sends with error details
         details: results
       },
       event: {

@@ -29,7 +29,7 @@ import { deleteGuestUpload } from "./Services/database/deleteGuestUpload.js";
 import { getGuestUploads } from "./Services/database/getGuestUploads.js";
 import { getGuestUploadContacts } from "./Services/database/getGuestUploadContacts.js";
 import { handleContactForm } from "./Services/contactForm.js";
-import { handleDialog360Webhook } from "./Services/dialog360Webhook.js";
+import { handleDialog360Webhook } from "./Services/dialog360/webhook.js";
 import { handleSendTemplate } from "./Services/dialog360SendTemplate.js";
 
 // Import extracted endpoint functions
@@ -69,7 +69,11 @@ app.use((req, res, next) => {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
-      const allowedOrigins = [process.env.BASE_URL, process.env.PRODUCTION_URL];
+      const allowedOrigins = [
+        process.env.BASE_URL, 
+        process.env.PRODUCTION_URL,
+        'https://romaine-coseys-contagiously.ngrok-free.dev' // ngrok development URL
+      ];
       if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
@@ -95,7 +99,11 @@ app.use((req, res, next) => {
   // Set proper origin header for cross-origin requests
   const origin = req.get('Origin');
   if (origin) {
-    const allowedOrigins = [process.env.BASE_URL, process.env.PRODUCTION_URL];
+    const allowedOrigins = [
+      process.env.BASE_URL, 
+      process.env.PRODUCTION_URL,
+      'https://romaine-coseys-contagiously.ngrok-free.dev' // ngrok development URL
+    ];
     if (allowedOrigins.includes(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
     }
