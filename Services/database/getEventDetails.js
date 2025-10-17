@@ -9,7 +9,7 @@ export async function getEventDetails(req, res) {
 
   try {
     const result = await pool.query(
-      `SELECT id, name, event_date, location, owner_email, event_type
+      `SELECT id, event_name, event_date, location, owner_email, event_type
        FROM events
        WHERE id = $1`,
       [eventId]

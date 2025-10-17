@@ -8,19 +8,55 @@ import pool from '../../db/db.js';
  */
 
 /**
- * Find contact by phone number
+ * Normalize phone number between international and local formats
+ * For Israel: 972544349661 <-> 0544349661
  * 
- * @param {string} phoneNumber - International phone number
+ * @param {string} phoneNumber - Phone number in any format
+ * @returns {Array<string>} Array of possible phone number formats to check
+ */
+function normalizePhoneNumberFormats(phoneNumber) {
+  const formats = [phoneNumber]; // Always include original format
+  
+  // Handle Israeli phone numbers
+  if (phoneNumber.startsWith('972')) {
+    // Convert international to local: 972544349661 -> 0544349661
+    const localFormat = '0' + phoneNumber.substring(3);
+    formats.push(localFormat);
+  } else if (phoneNumber.startsWith('0')) {
+    // Convert local to international: 0544349661 -> 972544349661
+    const internationalFormat = '972' + phoneNumber.substring(1);
+    formats.push(internationalFormat);
+  }
+  
+  return formats;
+}
+
+/**
+ * Find contact by phone number
+ * Handles both international (972544349661) and local (0544349661) formats
+ * 
+ * @param {string} phoneNumber - Phone number in any format
  * @returns {Promise<Object|null>} Contact object or null
  */
 export async function findContactByPhoneNumber(phoneNumber) {
   const client = await pool.connect();
   try {
+    // Get all possible formats for this phone number
+    const phoneFormats = normalizePhoneNumberFormats(phoneNumber);
+    
+    // Query with both formats
     const result = await client.query(
-      'SELECT id FROM contacts WHERE phone_number = $1',
-      [phoneNumber]
+      'SELECT id FROM contacts WHERE phone_number = ANY($1::text[])',
+      [phoneFormats]
     );
-    return result.rows.length > 0 ? result.rows[0] : null;
+    
+    if (result.rows.length === 0) {
+      console.log(`🔍 Phone number lookup failed for: ${phoneNumber} (tried formats: ${phoneFormats.join(', ')})`);
+      return null;
+    }
+    
+    console.log(`✅ Found contact for phone: ${phoneNumber} (matched: ${result.rows[0].id})`);
+    return result.rows[0];
   } finally {
     client.release();
   }
