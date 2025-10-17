@@ -270,14 +270,9 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
             );
             console.log(`📝 Error saved to existing invitation record (id: ${anyInvitationResult.rows[0].id})`);
           } else {
-            // No invitation record exists at all - create error record
-            await client.query(
-              `INSERT INTO event_messages (
-                event_id, contact_id, message_type, response, error_message
-              ) VALUES ($1, $2, $3, $4, $5)`,
-              [eventId, contactId, 'error', 'שגיאה', errorMsg]
-            );
-            console.log(`📝 Error saved as new record (no invitation found)`);
+            // No invitation record exists at all - just log to console, don't create record
+            console.error(`📝 No invitation record found - cannot save error to database`);
+            console.error(`   Skipping database insert to avoid constraint violation`);
           }
           
           await client.query('COMMIT');
