@@ -119,9 +119,9 @@ export async function sendTemplateMessage(params) {
       }
     };
 
-    // Skip header component - template "first_event_invitation" doesn't have a header
+    // Add header component with image for templates that support it (e.g., "event_invitation")
     // Note: Dialog360 v2 API requires exact match between template structure and payload
-    if (false && imageUrl) { // Disabled since template has no header component
+    if (imageUrl) {
       payload.template.components.push({
         type: 'header',
         parameters: [
@@ -394,7 +394,7 @@ export async function handleSendTemplate(req, res) {
       eventId,
       contactIds, // Array of contact IDs to send to
       userEmail, // User email for validation
-      templateName = 'first_event_invitation', // Default to existing approved template
+      templateName = 'event_invitation', // Default to existing approved template
       languageCode = 'he',
       buttons
     } = req.body;

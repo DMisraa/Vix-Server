@@ -54,7 +54,7 @@ function getCelebratorsNames(event) {
 }
 
 /**
- * Template: first_event_invitation
+ * Template: event_invitation
  * 
  * Body: חברים אהובים 💖
  * הגיע הזמן לחגוג!
@@ -148,7 +148,7 @@ function configureThankYouNote(event, contact) {
  */
 export function getTemplateConfiguration(templateName, event, contact) {
   const configurations = {
-    'first_event_invitation': configureFirstEventInvitation,
+    'event_invitation': configureFirstEventInvitation,
     'invitation_followup': configureInvitationFollowup,
     'second_reminder': configureSecondReminder,
     'thank_you_note': configureThankYouNote,
@@ -179,7 +179,7 @@ export function getTemplateConfiguration(templateName, event, contact) {
  */
 export function templateRequiresImage(templateName) {
   const templatesWithImages = [
-    'first_event_invitation',
+    'event_invitation',
     'event_directions'
   ];
   
@@ -191,7 +191,7 @@ export function templateRequiresImage(templateName) {
  */
 export function getAvailableTemplates() {
   return [
-    { name: 'first_event_invitation', description: 'הזמנה ראשונה לאירוע', hasImage: true },
+    { name: 'event_invitation', description: 'הזמנה ראשונה לאירוע', hasImage: true },
     { name: 'invitation_followup', description: 'הזמנת מעקב', hasImage: false },
     { name: 'second_reminder', description: 'תזכורת שנייה', hasImage: false },
     { name: 'first_reminderr', description: 'תזכורת ראשונה', hasImage: false },
