@@ -6,7 +6,8 @@ import {
   updateMessageResponse,
   setAwaitingGuestCount,
   findEventMessageByMessageId,
-  updateMessageSeenAt
+  updateMessageSeenAt,
+  updateMessageFailure
 } from '../database/eventMessagesRepository.js';
 import { mapInvitationButtonResponse } from './responseMapper.js';
 import { sendGuestCountQuestion, markMessageAsRead, sendDeclineConfirmation, sendMaybeConfirmation } from './whatsappMessenger.js';
@@ -110,7 +111,7 @@ export async function processDialog360Message(message, value) {
 
 /**
  * Process status updates for sent messages
- * Tracks when guests open/read WhatsApp invitations
+ * Tracks when guests open/read invitations AND when delivery fails
  * 
  * @param {Object} status - WhatsApp status object
  * @param {Object} value - WhatsApp webhook value object
@@ -124,26 +125,52 @@ export async function processDialog360Status(status, value) {
 
     console.log('📱 Status update:', { messageId, recipientId, status: statusType });
 
-    // Only track "read" status - when guest opens the invitation
+    // Find the event_message record by message_id (needed for both read and failed)
+    const eventMessage = await findEventMessageByMessageId(messageId);
+    
+    if (!eventMessage) {
+      console.log(`ℹ️  No event_message found for message_id: ${messageId}`);
+      return;
+    }
+    
+    console.log(`✅ Found event_message ${eventMessage.id} for message_id ${messageId}`);
+    
+    // Convert WhatsApp timestamp to JavaScript Date
+    const statusTime = new Date(parseInt(timestamp) * 1000);
+
+    // Track "read" status - when guest opens the invitation
     if (statusType === 'read') {
-      // Find the event_message record by message_id
-      const eventMessage = await findEventMessageByMessageId(messageId);
+      await updateMessageSeenAt(eventMessage.id, statusTime);
+      console.log(`✅ Guest ${recipientId} opened invitation at ${statusTime.toISOString()}`);
       
-      if (!eventMessage) {
-        console.log(`ℹ️  No event_message found for message_id: ${messageId}`);
-        return;
+    // Track "failed" status - when delivery fails
+    } else if (statusType === 'failed') {
+      // Extract failure reason from status errors
+      const errors = status.errors || [];
+      let failureReason = 'Unknown failure';
+      
+      if (errors.length > 0) {
+        const errorDetails = errors[0].error_data?.details || errors[0].message || 'No details provided';
+        failureReason = errorDetails;
+        
+        // Log specific error types for monitoring
+        if (errorDetails.includes('experiment')) {
+          console.error(`❌ Delivery failed - WhatsApp Beta/Experiment: ${recipientId}`);
+        } else if (errorDetails.includes('blocked')) {
+          console.error(`❌ Delivery failed - User blocked business: ${recipientId}`);
+        } else if (errorDetails.includes('not registered')) {
+          console.error(`❌ Delivery failed - Number not on WhatsApp: ${recipientId}`);
+        } else {
+          console.error(`❌ Delivery failed - ${errorDetails}: ${recipientId}`);
+        }
       }
       
-      console.log(`✅ Found event_message ${eventMessage.id} for message_id ${messageId}`);
+      // Save failure reason to database
+      await updateMessageFailure(eventMessage.id, failureReason);
+      console.log(`❌ Message failure logged for ${recipientId}: ${failureReason}`);
       
-      // Convert WhatsApp timestamp to JavaScript Date
-      const seenAt = new Date(parseInt(timestamp) * 1000);
-      
-      // Update seen_at timestamp
-      await updateMessageSeenAt(eventMessage.id, seenAt);
-      console.log(`✅ Guest ${recipientId} opened invitation at ${seenAt.toISOString()}`);
     } else {
-      console.log(`ℹ️  Ignoring ${statusType} status (we only track 'read')`);
+      console.log(`ℹ️  Ignoring ${statusType} status (we track 'read' and 'failed')`);
     }
     
   } catch (error) {

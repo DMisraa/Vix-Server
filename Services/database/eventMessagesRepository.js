@@ -51,6 +51,25 @@ export async function updateMessageSeenAt(eventMessageId, seenAt) {
   }
 }
 
+/**
+ * Update failure_reason when message fails to deliver
+ * 
+ * @param {number} eventMessageId - Event message ID
+ * @param {string} failureReason - Reason for failure
+ */
+export async function updateMessageFailure(eventMessageId, failureReason) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      'UPDATE event_messages SET failure_reason = $1 WHERE id = $2',
+      [failureReason, eventMessageId]
+    );
+    console.log(`❌ Message failed - logged reason for event_message ${eventMessageId}: ${failureReason}`);
+  } finally {
+    client.release();
+  }
+}
+
 
 /**
  * Find contact by phone number and event context
