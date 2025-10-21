@@ -71,16 +71,41 @@ function getCelebratorsNames(event) {
  * 6. Time
  */
 function configureFirstEventInvitation(event, contact) {
+  // Debug logging - check what data we receive from DB
+  console.log('🔍 EVENT DATA FROM DB:', {
+    event_type: event.event_type,
+    celebrator1_name: event.celebrator1_name,
+    celebrator2_name: event.celebrator2_name,
+    event_date: event.event_date,
+    venue_name: event.venue_name,
+    location: event.location,
+    event_time: event.event_time
+  });
+
+  const eventName = getEventTypeHebrew(event.event_type);              // Variable 1
+  const eventDate = getCelebratorsNames(event);                        // Variable 2
+  const eventLocation = getDayOfWeek(event.event_date);               // Variable 3
+  const customParamsRaw = [
+    formatEventDate(event.event_date) || '',                          // Variable 4
+    event.venue_name || event.location || '',                         // Variable 5
+    event.event_time || ''                                            // Variable 6
+  ];
+  const customParamsFiltered = customParamsRaw.filter(Boolean);
+
+  console.log('🔍 CONFIGURED VALUES:', {
+    eventName,
+    eventDate,
+    eventLocation,
+    customParamsRaw,
+    customParamsFiltered,
+    '⚠️ Parameters removed by filter': customParamsRaw.length - customParamsFiltered.length
+  });
+
   return {
-    // No guestName needed for this template
-    eventName: getEventTypeHebrew(event.event_type),              // Variable 1
-    eventDate: getCelebratorsNames(event),                        // Variable 2
-    eventLocation: getDayOfWeek(event.event_date),               // Variable 3
-    customParams: [
-      formatEventDate(event.event_date) || '',                   // Variable 4
-      event.venue_name || event.location || '',                  // Variable 5
-      event.event_time || ''                                     // Variable 6
-    ].filter(Boolean)
+    eventName,
+    eventDate,
+    eventLocation,
+    customParams: customParamsFiltered
   };
 }
 

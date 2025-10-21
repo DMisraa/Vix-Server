@@ -137,15 +137,28 @@ export async function sendTemplateMessage(params) {
 
     // Add body component with template variables
     if (templateData) {
+      console.log('🔍 TEMPLATE DATA RECEIVED:', templateData);
+      
       const bodyParameters = [];
 
       // Add template variables in order with parameter names for Dialog360 v2 API
+      console.log('🔍 TRUTHY CHECKS:', {
+        'guestName truthy?': !!templateData.guestName,
+        'eventName truthy?': !!templateData.eventName,
+        'eventDate truthy?': !!templateData.eventDate,
+        'eventLocation truthy?': !!templateData.eventLocation,
+        'customParams length': templateData.customParams?.length
+      });
+
       if (templateData.guestName) {
         bodyParameters.push({
           type: 'text',
           text: templateData.guestName,
           parameter_name: 'guest_name'
         });
+        console.log('✅ Added guestName');
+      } else {
+        console.log('❌ Skipped guestName (falsy)');
       }
 
       if (templateData.eventName) {
@@ -154,6 +167,9 @@ export async function sendTemplateMessage(params) {
           text: templateData.eventName,
           parameter_name: 'variable_1'
         });
+        console.log('✅ Added eventName as variable_1');
+      } else {
+        console.log('❌ Skipped eventName (falsy)');
       }
 
       if (templateData.eventDate) {
@@ -162,6 +178,9 @@ export async function sendTemplateMessage(params) {
           text: templateData.eventDate,
           parameter_name: 'variable_2'
         });
+        console.log('✅ Added eventDate as variable_2');
+      } else {
+        console.log('❌ Skipped eventDate (falsy) - THIS CAUSES PARAMETER SHIFT!');
       }
 
       if (templateData.eventLocation) {
@@ -170,6 +189,9 @@ export async function sendTemplateMessage(params) {
           text: templateData.eventLocation,
           parameter_name: 'variable_3'
         });
+        console.log('✅ Added eventLocation as variable_3');
+      } else {
+        console.log('❌ Skipped eventLocation (falsy) - THIS CAUSES PARAMETER SHIFT!');
       }
 
       // Add any additional custom parameters with sequential variable names
@@ -180,8 +202,12 @@ export async function sendTemplateMessage(params) {
             text: param,
             parameter_name: `variable_${index + 4}` // Start from variable_4
           });
+          console.log(`✅ Added customParams[${index}] as variable_${index + 4}: "${param}"`);
         });
       }
+
+      console.log('🔍 FINAL BODY PARAMETERS COUNT:', bodyParameters.length);
+      console.log('🔍 FINAL BODY PARAMETERS:', JSON.stringify(bodyParameters, null, 2));
 
       if (bodyParameters.length > 0) {
         payload.template.components.push({
