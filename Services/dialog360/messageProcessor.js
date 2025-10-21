@@ -4,7 +4,9 @@ import {
   findAwaitingGuestCountMessage,
   findPendingInvitation,
   updateMessageResponse,
-  setAwaitingGuestCount
+  setAwaitingGuestCount,
+  findEventMessageByMessageId,
+  updateMessageSeenAt
 } from '../database/eventMessagesRepository.js';
 import { mapInvitationButtonResponse } from './responseMapper.js';
 import { sendGuestCountQuestion, markMessageAsRead, sendDeclineConfirmation, sendMaybeConfirmation } from './whatsappMessenger.js';
@@ -108,21 +110,45 @@ export async function processDialog360Message(message, value) {
 
 /**
  * Process status updates for sent messages
+ * Tracks when guests open/read WhatsApp invitations
  * 
  * @param {Object} status - WhatsApp status object
  * @param {Object} value - WhatsApp webhook value object
  */
 export async function processDialog360Status(status, value) {
   try {
-    const statusId = status.id;
-    const recipientId = status.recipient_id;
-    const statusType = status.status;
-    const timestamp = status.timestamp;
+    const messageId = status.id; // WhatsApp message ID
+    const recipientId = status.recipient_id; // Phone number
+    const statusType = status.status; // 'sent', 'delivered', 'read', 'failed'
+    const timestamp = status.timestamp; // Unix timestamp
 
-    console.log('Status update:', { statusId, recipientId, status: statusType });
-    // ✅ Add DB update logic here if needed
+    console.log('📱 Status update:', { messageId, recipientId, status: statusType });
+
+    // Only track "read" status - when guest opens the invitation
+    if (statusType === 'read') {
+      // Find the event_message record by message_id
+      const eventMessage = await findEventMessageByMessageId(messageId);
+      
+      if (!eventMessage) {
+        console.log(`ℹ️  No event_message found for message_id: ${messageId}`);
+        return;
+      }
+      
+      console.log(`✅ Found event_message ${eventMessage.id} for message_id ${messageId}`);
+      
+      // Convert WhatsApp timestamp to JavaScript Date
+      const seenAt = new Date(parseInt(timestamp) * 1000);
+      
+      // Update seen_at timestamp
+      await updateMessageSeenAt(eventMessage.id, seenAt);
+      console.log(`✅ Guest ${recipientId} opened invitation at ${seenAt.toISOString()}`);
+    } else {
+      console.log(`ℹ️  Ignoring ${statusType} status (we only track 'read')`);
+    }
+    
   } catch (error) {
-    console.error('Error processing status:', error);
+    console.error('Error processing status update:', error);
+    console.error('Error details:', error.stack);
   }
 }
 

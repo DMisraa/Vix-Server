@@ -8,6 +8,49 @@ import { normalizePhoneNumberFormats } from '../utils/phoneNormalization.js';
  * related to WhatsApp invitation responses and guest counts
  */
 
+/**
+ * Find event message by WhatsApp message_id
+ * 
+ * @param {string} messageId - WhatsApp message ID
+ * @returns {Promise<Object|null>} Event message object or null
+ */
+export async function findEventMessageByMessageId(messageId) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      'SELECT id, event_id, contact_id FROM event_messages WHERE message_id = $1 LIMIT 1',
+      [messageId]
+    );
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    return result.rows[0];
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Update seen_at when guest opens invitation
+ * 
+ * @param {number} eventMessageId - Event message ID
+ * @param {Date} seenAt - Timestamp when message was read
+ */
+export async function updateMessageSeenAt(eventMessageId, seenAt) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      'UPDATE event_messages SET seen_at = $1 WHERE id = $2',
+      [seenAt, eventMessageId]
+    );
+    console.log(`✅ Message seen - updated seen_at for event_message ${eventMessageId}`);
+  } finally {
+    client.release();
+  }
+}
+
 
 /**
  * Find contact by phone number and event context

@@ -549,12 +549,23 @@ export async function handleSendTemplate(req, res) {
           );
 
           if (existing.rows.length === 0) {
+            // Save invitation with WhatsApp message_id for tracking seen status
             await client.query(
               `INSERT INTO event_messages (
-                event_id, contact_id, message_type, message_round, response
-              ) VALUES ($1, $2, $3, $4, $5)`,
-              [eventId, contact.id, 'invitation', 1, 'ממתין לתגובה']
+                event_id, contact_id, message_type, message_round, response, message_id
+              ) VALUES ($1, $2, $3, $4, $5, $6)`,
+              [eventId, contact.id, 'invitation', 1, 'ממתין לתגובה', success.messageId]
             );
+            console.log(`✅ Invitation logged with message_id: ${success.messageId}`);
+          } else {
+            // Update existing record with WhatsApp message_id
+            await client.query(
+              `UPDATE event_messages 
+               SET message_id = $1 
+               WHERE id = $2`,
+              [success.messageId, existing.rows[0].id]
+            );
+            console.log(`✅ Updated invitation with message_id: ${success.messageId}`);
           }
         }
       }
