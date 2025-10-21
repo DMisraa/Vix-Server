@@ -85,17 +85,43 @@ function configureFirstEventInvitation(event, contact) {
 }
 
 /**
- * Template: second_reminder
- * Add configuration when you create this template
+ * Template: invitation_followup (Followup Invitation)
+ * 
+ * This template is used for followup invitations to contacts who responded "maybe"
+ * and need a reminder about the event.
+ * 
+ * Body: שלום {{guest_name}} 👋
+ * רצינו לזכור לך על ה{{variable_1}} של {{variable_2}}.
+ * האירוע יתקיים ביום {{variable_3}}, בתאריך {{variable_4}}, ב-{{variable_5}}.
+ * קבלת פנים החל מהשעה {{variable_6}}.
+ * 
+ * Variables:
+ * 1. Event type (חתונה, בר מצווה, etc.)
+ * 2. Celebrators names
+ * 3. Day of week
+ * 4. Date (DD.MM.YYYY)
+ * 5. Location/Venue
+ * 6. Time
+ */
+function configureInvitationFollowup(event, contact) {
+  return {
+    guestName: contact.display_name || contact.canonical_form || 'אורח',
+    eventName: getEventTypeHebrew(event.event_type),              // Variable 1
+    eventDate: getCelebratorsNames(event),                        // Variable 2
+    eventLocation: getDayOfWeek(event.event_date),                // Variable 3
+    customParams: [
+      formatEventDate(event.event_date) || '',                   // Variable 4
+      event.venue_name || event.location || '',                  // Variable 5
+      event.event_time || ''                                     // Variable 6
+    ].filter(Boolean)
+  };
+}
+
+/**
+ * Template: second_reminder (Legacy - kept for backward compatibility)
  */
 function configureSecondReminder(event, contact) {
-  // TODO: Configure when template is ready
-  return {
-    eventName: event.event_name,
-    eventDate: formatEventDate(event.event_date),
-    eventLocation: event.location || event.venue_name || '',
-    customParams: []
-  };
+  return configureInvitationFollowup(event, contact); // Reuse same config
 }
 
 /**
@@ -123,6 +149,7 @@ function configureThankYouNote(event, contact) {
 export function getTemplateConfiguration(templateName, event, contact) {
   const configurations = {
     'first_event_invitation': configureFirstEventInvitation,
+    'invitation_followup': configureInvitationFollowup,
     'second_reminder': configureSecondReminder,
     'thank_you_note': configureThankYouNote,
     'first_reminderr': configureSecondReminder, // Reuse same config
@@ -165,6 +192,7 @@ export function templateRequiresImage(templateName) {
 export function getAvailableTemplates() {
   return [
     { name: 'first_event_invitation', description: 'הזמנה ראשונה לאירוע', hasImage: true },
+    { name: 'invitation_followup', description: 'הזמנת מעקב', hasImage: false },
     { name: 'second_reminder', description: 'תזכורת שנייה', hasImage: false },
     { name: 'first_reminderr', description: 'תזכורת ראשונה', hasImage: false },
     { name: 'thank_you_note', description: 'הודעת תודה', hasImage: false },

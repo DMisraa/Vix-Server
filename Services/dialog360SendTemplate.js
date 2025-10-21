@@ -1,5 +1,6 @@
 import pool from '../db/db.js';
 import { getTemplateConfiguration } from './templates/templateConfigurations.js';
+import { normalizePhoneForDialog360 } from './utils/phoneNormalization.js';
 
 /**
  * Dialog 360 Template Message Sender (v2 API)
@@ -459,26 +460,6 @@ export async function handleSendTemplate(req, res) {
       });
     }
 
-    // Normalize phone number to international format for Dialog360
-    const normalizePhoneForDialog360 = (phoneNumber) => {
-      if (!phoneNumber) return null;
-      
-      // Remove all non-digit characters
-      let cleaned = phoneNumber.replace(/\D/g, '');
-      
-      // If starts with 0 and is 9-10 digits (Israeli local format)
-      if (cleaned.startsWith('0') && (cleaned.length === 9 || cleaned.length === 10)) {
-        // Convert to international format: 972XXXXXXXXX
-        cleaned = '972' + cleaned.substring(1);
-      }
-      
-      // If starts with +, remove it
-      if (phoneNumber.startsWith('+')) {
-        cleaned = phoneNumber.substring(1).replace(/\D/g, '');
-      }
-      
-      return cleaned;
-    };
 
     // Prepare recipients with personalized event data
     const recipients = contacts.map(contact => {

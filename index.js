@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import cron from "node-cron";
 
 import sendEmail from "./Services/email.js";
 import { extractExcelData } from "./Services/extractExcelContacts.js";
@@ -28,9 +29,11 @@ import { uploadGuestContacts } from "./Services/database/uploadGuestContacts.js"
 import { deleteGuestUpload } from "./Services/database/deleteGuestUpload.js";
 import { getGuestUploads } from "./Services/database/getGuestUploads.js";
 import { getGuestUploadContacts } from "./Services/database/getGuestUploadContacts.js";
+import { getFollowupNotifications, dismissFollowupNotification } from "./Services/database/getFollowupNotifications.js";
 import { handleContactForm } from "./Services/contactForm.js";
 import { handleDialog360Webhook } from "./Services/dialog360/webhook.js";
 import { handleSendTemplate } from "./Services/dialog360SendTemplate.js";
+import { processFollowupInvitations, triggerFollowupInvitations } from "./Services/followupInvitations.js";
 
 // Import extracted endpoint functions
 import { verifyJwt } from "./Services/auth/verifyJwt.js";
@@ -192,6 +195,10 @@ app.post('/upload-guest-contacts', uploadGuestContacts);
 app.get('/api/guest-uploads', getGuestUploads);
 app.get('/api/guest-uploads/:uploadId/contacts', getGuestUploadContacts);
 
+// Followup notifications endpoints
+app.get('/api/followup-notifications', getFollowupNotifications);
+app.delete('/api/followup-notifications/:notificationId', dismissFollowupNotification);
+
 // WhatsApp endpoints
 app.get('/api/whatsapp/status', (req, res) => {
     const status = getWhatsAppStatus();
@@ -246,8 +253,26 @@ app.post('/api/dialog360/webhook', handleDialog360Webhook);
 // Dialog 360 send template message endpoint
 app.post('/api/dialog360/send-template', handleSendTemplate);
 
+// Followup invitations endpoint (for manual testing)
+app.post('/api/followup-invitations/trigger', triggerFollowupInvitations);
+
 // Initialize WhatsApp listener
 initializeWhatsApp();
+
+// Setup cron job for followup invitations
+// Runs daily at 10:00 AM to send followup invitations
+cron.schedule('0 10 * * *', async () => {
+  console.log('🕙 Cron job triggered: Processing followup invitations...');
+  try {
+    const result = await processFollowupInvitations();
+    console.log('✅ Cron job completed:', result);
+  } catch (error) {
+    console.error('❌ Cron job failed:', error);
+  }
+}, {
+  scheduled: true,
+  timezone: "Asia/Jerusalem" // Israeli timezone
+});
 
 
 app.listen(port, () => console.log(`Server running on port ${port}`));

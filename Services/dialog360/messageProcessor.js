@@ -9,6 +9,7 @@ import {
 import { mapInvitationButtonResponse } from './responseMapper.js';
 import { sendGuestCountQuestion, markMessageAsRead, sendDeclineConfirmation, sendMaybeConfirmation } from './whatsappMessenger.js';
 import { handleGuestCountReply } from './guestCountHandler.js';
+import { calculateFollowupDate, getFollowupDisplayText } from './followUpButtonsHelper.js';
 
 /**
  * Message Processor
@@ -302,31 +303,19 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
       if (maybeInvitationResult.rows.length > 0) {
         const eventMessageId = maybeInvitationResult.rows[0].id;
         
-        // Calculate follow-up date based on button clicked
-        const today = new Date();
-        let followupDate;
-        let followupText;
-        
-        if (payload === 'followup_3days') {
-          followupDate = new Date(today.setDate(today.getDate() + 3));
-          followupText = 'בעוד 3 ימים';
-        } else if (payload === 'followup_week') {
-          followupDate = new Date(today.setDate(today.getDate() + 7));
-          followupText = 'בעוד שבוע';
-        } else if (payload === 'followup_2weeks') {
-          followupDate = new Date(today.setDate(today.getDate() + 14));
-          followupText = 'בעוד שבועיים';
-        }
+        // Calculate follow-up date using helper function (handles all button types including 5 days)
+        const followupDate = calculateFollowupDate(payload);
+        const followupText = getFollowupDisplayText(payload);
         
         // Store follow-up date in database
         await client.query(
           `UPDATE event_messages 
            SET followup_date = $1 
            WHERE id = $2`,
-          [followupDate.toISOString().split('T')[0], eventMessageId]
+          [followupDate, eventMessageId]
         );
         
-        console.log(`✅ Follow-up date set for contact ${contactId}: ${followupDate.toISOString().split('T')[0]}`);
+        console.log(`✅ Follow-up date set for contact ${contactId}: ${followupDate}`);
         
         // Send confirmation
         await client.query('COMMIT');
@@ -416,6 +405,28 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     // Update the event_messages record with the response
     await updateMessageResponse(eventMessageId, mappedResponse, responseTime);
     
+    // For "maybe" responses, fetch event date and celebrator names before committing (within transaction)
+    let eventDate = null;
+    let celebrator1Name = null;
+    let celebrator2Name = null;
+    
+    if (mappedResponse === 'לא בטוח') {
+      const eventInfoResult = await client.query(
+        'SELECT event_date, celebrator1_name, celebrator2_name FROM events WHERE id = $1',
+        [eventId]
+      );
+      
+      if (eventInfoResult.rows.length > 0) {
+        eventDate = eventInfoResult.rows[0].event_date;
+        celebrator1Name = eventInfoResult.rows[0].celebrator1_name;
+        celebrator2Name = eventInfoResult.rows[0].celebrator2_name;
+        
+        console.log(`📅 Fetched event info - Date: ${eventDate}, Celebrators: ${celebrator1Name || 'N/A'} & ${celebrator2Name || 'N/A'}`);
+      } else {
+        console.warn('⚠️  No event info found - using defaults');
+      }
+    }
+    
     await client.query('COMMIT');
     console.log(`✅ Updated response for contact ${contactId} in event ${eventId}: ${mappedResponse}`);
     
@@ -430,8 +441,8 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
       await sendDeclineConfirmation(phoneNumber);
       
     } else if (mappedResponse === 'לא בטוח') {
-      // Maybe - Send maybe confirmation
-      await sendMaybeConfirmation(phoneNumber);
+      // Maybe - Send maybe confirmation with dynamic buttons based on event proximity
+      await sendMaybeConfirmation(phoneNumber, eventDate, celebrator1Name, celebrator2Name);
     }
     
   } catch (error) {

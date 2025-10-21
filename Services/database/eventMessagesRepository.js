@@ -1,4 +1,5 @@
 import pool from '../../db/db.js';
+import { normalizePhoneNumberFormats } from '../utils/phoneNormalization.js';
 
 /**
  * Event Messages Database Repository
@@ -7,29 +8,6 @@ import pool from '../../db/db.js';
  * related to WhatsApp invitation responses and guest counts
  */
 
-/**
- * Normalize phone number between international and local formats
- * For Israel: 972544349661 <-> 0544349661
- * 
- * @param {string} phoneNumber - Phone number in any format
- * @returns {Array<string>} Array of possible phone number formats to check
- */
-function normalizePhoneNumberFormats(phoneNumber) {
-  const formats = [phoneNumber]; // Always include original format
-  
-  // Handle Israeli phone numbers
-  if (phoneNumber.startsWith('972')) {
-    // Convert international to local: 972544349661 -> 0544349661
-    const localFormat = '0' + phoneNumber.substring(3);
-    formats.push(localFormat);
-  } else if (phoneNumber.startsWith('0')) {
-    // Convert local to international: 0544349661 -> 972544349661
-    const internationalFormat = '972' + phoneNumber.substring(1);
-    formats.push(internationalFormat);
-  }
-  
-  return formats;
-}
 
 /**
  * Find contact by phone number and event context

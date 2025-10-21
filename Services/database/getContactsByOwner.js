@@ -53,11 +53,12 @@ export async function getContactsByEventWithTags(req, res) {
           c.contact_owner,
           COALESCE(ec.tags, c.tags, '{}') as tags,
           em.response as invitation_response,
-          em.guests_coming
+          em.guests_coming,
+          em.message_round
          FROM contacts c
          INNER JOIN event_contacts ec ON c.id = ec.contact_id
          LEFT JOIN LATERAL (
-           SELECT response, guests_coming
+           SELECT response, guests_coming, message_round
            FROM event_messages
            WHERE event_id = $2 AND contact_id = c.id
            ORDER BY response_time DESC NULLS LAST
@@ -77,6 +78,7 @@ export async function getContactsByEventWithTags(req, res) {
         tags: row.tags || [],
         invitationResponse: row.invitation_response,
         guestsComing: row.guests_coming || 0,
+        messageRound: row.message_round || 0,
       }));
 
       res.status(200).json({ contacts: formattedContacts });

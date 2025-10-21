@@ -8,6 +8,8 @@
  * - Message read receipts
  */
 
+import { getFollowUpButtons, getEventTooCloseMessage } from './followUpButtonsHelper.js';
+
 /**
  * Mark message as read (shows colored ticks to sender)
  * 
@@ -228,11 +230,24 @@ export async function sendDeclineConfirmation(phoneNumber) {
 }
 
 /**
- * Send maybe confirmation message with follow-up buttons
+ * Send maybe confirmation message with dynamic follow-up buttons
+ * 
+ * Buttons shown depend on event proximity:
+ * - >17 days: 3 days, 1 week, 2 weeks
+ * - 10-17 days: 3 days, 1 week
+ * - 7-9 days: 3 days, 5 days
+ * - 5-6 days: 3 days only
+ * - 4 days: 2 days only
+ * - 3 days: 2 days, tomorrow
+ * - 2 days: tomorrow only
+ * - <2 days: text message only (no buttons)
  * 
  * @param {string} phoneNumber - Phone number to send to
+ * @param {string|Date} eventDate - Event date to calculate proximity
+ * @param {string|null} celebrator1Name - First celebrator name
+ * @param {string|null} celebrator2Name - Second celebrator name (optional)
  */
-export async function sendMaybeConfirmation(phoneNumber) {
+export async function sendMaybeConfirmation(phoneNumber, eventDate = null, celebrator1Name = null, celebrator2Name = null) {
   try {
     const apiKey = process.env.D360_API_KEY;
     
@@ -241,7 +256,46 @@ export async function sendMaybeConfirmation(phoneNumber) {
       return;
     }
     
-    console.log(`📤 Sending maybe confirmation with follow-up buttons to ${phoneNumber}`);
+    console.log(`📤 Sending maybe confirmation to ${phoneNumber}`);
+    console.log(`📅 Event date: ${eventDate}`);
+    
+    // Get dynamic buttons based on event proximity
+    const buttons = getFollowUpButtons(eventDate);
+    
+    // Check if event is too close (< 2 days) - send text message only
+    if (buttons === 'too_close') {
+      console.log('⚠️  Event is too close - sending text message without buttons');
+      
+      const messageText = getEventTooCloseMessage(celebrator1Name, celebrator2Name);
+      
+      const payload = {
+        messaging_product: 'whatsapp',
+        to: phoneNumber,
+        type: 'text',
+        text: { body: messageText }
+      };
+      
+      const response = await fetch('https://waba-v2.360dialog.io/messages', {
+        method: 'POST',
+        headers: {
+          'D360-API-KEY': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        console.error(`Failed to send too-close message: ${error}`);
+      } else {
+        console.log(`✅ Event-too-close message sent to ${phoneNumber}`);
+      }
+      
+      return;
+    }
+    
+    // Send interactive message with buttons
+    console.log(`📋 Showing ${buttons.length} follow-up button(s):`, buttons.map(b => b.reply.title).join(', '));
     
     const payload = {
       messaging_product: 'whatsapp',
@@ -254,29 +308,7 @@ export async function sendMaybeConfirmation(phoneNumber) {
           text: 'בסדר גמור! 😊\n\nמתי נוכל לבדוק איתך שוב?'
         },
         action: {
-          buttons: [
-            {
-              type: 'reply',
-              reply: {
-                id: 'followup_3days',
-                title: 'בעוד 3 ימים'
-              }
-            },
-            {
-              type: 'reply',
-              reply: {
-                id: 'followup_week',
-                title: 'בעוד שבוע'
-              }
-            },
-            {
-              type: 'reply',
-              reply: {
-                id: 'followup_2weeks',
-                title: 'בעוד שבועיים'
-              }
-            }
-          ]
+          buttons: buttons
         }
       }
     };
@@ -294,7 +326,7 @@ export async function sendMaybeConfirmation(phoneNumber) {
       const error = await response.text();
       console.error(`Failed to send maybe confirmation: ${error}`);
     } else {
-      console.log(`✅ Maybe confirmation with buttons sent to ${phoneNumber}`);
+      console.log(`✅ Maybe confirmation with ${buttons.length} button(s) sent to ${phoneNumber}`);
     }
     
   } catch (error) {
