@@ -149,9 +149,6 @@ export async function processDialog360Status(status, value) {
       const errors = status.errors || [];
       let failureReason = 'Unknown failure';
       
-      // Log the complete meta error object for debugging
-      console.error(`❌ Full Meta Error Object for ${recipientId}:`, JSON.stringify(status, null, 2));
-      
       if (errors.length > 0) {
         const errorDetails = errors[0].error_data?.details || errors[0].message || 'No details provided';
         failureReason = errorDetails;
@@ -171,6 +168,12 @@ export async function processDialog360Status(status, value) {
       // Save failure reason to database
       await updateMessageFailure(eventMessage.id, failureReason);
       console.log(`❌ Message failure logged for ${recipientId}: ${failureReason}`);
+      
+      // Log the complete meta error object for debugging (at the end to avoid log interleaving)
+      console.error(`\n========== FULL META ERROR OBJECT START ==========`);
+      console.error(`Recipient: ${recipientId}`);
+      console.error(JSON.stringify(status, null, 2));
+      console.error(`========== FULL META ERROR OBJECT END ==========\n`);
       
     } else {
       console.log(`ℹ️  Ignoring ${statusType} status (we track 'read' and 'failed')`);
