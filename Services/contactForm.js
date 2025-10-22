@@ -49,7 +49,9 @@ async function sendWithResend(resend, { name, email, subject, message }, res) {
     from: 'Vix Contact Form <onboarding@resend.dev>',
     to: ['hello@vixsolutions.co.il'],
     subject: `הודעה חדשה מ-${name}: ${subject}`,
-    resendResponse: mainEmailResult
+    resendResponse: mainEmailResult,
+    success: mainEmailResult.success,
+    error: mainEmailResult.error
   });
 
   // Send confirmation email to the user
@@ -234,14 +236,15 @@ export async function handleContactForm(req, res) {
   }
 
   try {
-    // Always use Gmail SMTP (like the Footer contact form)
-    if (!process.env.VIX_EMAIL || !process.env.VIX_EMAIL_PASS) {
-      console.error('Missing Gmail credentials');
+    // Use Resend for Railway (SMTP is blocked)
+    if (!process.env.RESEND_API_KEY) {
+      console.error('Missing Resend API key');
       return res.status(500).json({ error: 'שירות דואר לא מוגדר' });
     }
     
-    console.log('Using Gmail SMTP (like Footer contact form)...');
-    return await sendWithGmail({ name, email, subject, message }, res);
+    console.log('Using Resend email service for Railway...');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    return await sendWithResend(resend, { name, email, subject, message }, res);
 
   } catch (error) {
     console.error('Error sending contact form email:', error);
