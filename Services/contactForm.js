@@ -106,6 +106,107 @@ async function sendWithResend(resend, { name, email, subject, message }, res) {
   });
 }
 
+// Function to send emails via Zoho SMTP (production ready)
+async function sendWithZoho({ name, email, subject, message }, res) {
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.zoho.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.ZOHO_EMAIL, // hello@vixsolutions.co.il
+      pass: process.env.ZOHO_PASSWORD, // your Zoho password
+    },
+  });
+
+  // Send main email
+  console.log('Sending contact form email via Zoho SMTP...');
+  await transporter.sendMail({
+    from: `"Vix Contact Form" <${process.env.ZOHO_EMAIL}>`,
+    to: process.env.ZOHO_EMAIL, // Send to hello@vixsolutions.co.il
+    subject: `הודעה חדשה מ-${name}: ${subject}`,
+    html: `
+      <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333; border-bottom: 2px solid #e91e63; padding-bottom: 10px;">
+          הודעה חדשה מהאתר
+        </h2>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="color: #e91e63; margin-top: 0;">פרטי השולח:</h3>
+          <p><strong>שם:</strong> ${name}</p>
+          <p><strong>אימייל:</strong> ${email}</p>
+          <p><strong>נושא:</strong> ${subject}</p>
+        </div>
+        
+        <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-top: 0;">תוכן ההודעה:</h3>
+          <p style="line-height: 1.6; white-space: pre-wrap;">${message}</p>
+        </div>
+        
+        <div style="margin-top: 20px; padding: 15px; background-color: #e3f2fd; border-radius: 8px;">
+          <p style="margin: 0; color: #1976d2; font-size: 14px;">
+            <strong>זמן שליחה:</strong> ${new Date().toLocaleString('he-IL', { 
+              timeZone: 'Asia/Jerusalem',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </p>
+        </div>
+      </div>
+    `,
+    replyTo: email
+  });
+  
+  console.log('✅ Main email sent successfully via Zoho');
+
+  // Send confirmation email
+  console.log('Sending confirmation email via Zoho SMTP...');
+  await transporter.sendMail({
+    from: `"Vix Solutions" <${process.env.ZOHO_EMAIL}>`,
+    to: email,
+    subject: 'תודה על פנייתך - Vix Solutions',
+    html: `
+      <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #e91e63; text-align: center;">תודה על פנייתך!</h2>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p>שלום ${name},</p>
+          <p>קיבלנו את הודעתך ונחזור אליך בהקדם האפשרי.</p>
+          <p><strong>פרטי הפנייה שלך:</strong></p>
+          <ul>
+            <li><strong>נושא:</strong> ${subject}</li>
+            <li><strong>זמן שליחה:</strong> ${new Date().toLocaleString('he-IL', { 
+              timeZone: 'Asia/Jerusalem',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</li>
+          </ul>
+        </div>
+        
+        <div style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center;">
+          <p style="margin: 0; color: #1976d2;">
+            <strong>צוות Vix Solutions</strong><br>
+            📧 hello@vixsolutions.co.il<br>
+            📞 053-924-2324
+          </p>
+        </div>
+      </div>
+    `
+  });
+  
+  console.log('✅ Confirmation email sent successfully via Zoho');
+
+  res.status(200).json({ 
+    success: true, 
+    message: 'ההודעה נשלחה בהצלחה! נחזור אליך בהקדם.' 
+  });
+}
+
 // Function to send emails via Gmail SMTP (for development)
 async function sendWithGmail({ name, email, subject, message }, res) {
   const transporter = nodemailer.createTransport({
@@ -236,15 +337,14 @@ export async function handleContactForm(req, res) {
   }
 
   try {
-    // Use Resend for Railway (SMTP is blocked)
-    if (!process.env.RESEND_API_KEY) {
-      console.error('Missing Resend API key');
+    // Use Zoho SMTP (already configured and working)
+    if (!process.env.ZOHO_EMAIL || !process.env.ZOHO_PASSWORD) {
+      console.error('Missing Zoho email credentials');
       return res.status(500).json({ error: 'שירות דואר לא מוגדר' });
     }
     
-    console.log('Using Resend email service for Railway...');
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    return await sendWithResend(resend, { name, email, subject, message }, res);
+    console.log('Using Zoho SMTP email service...');
+    return await sendWithZoho({ name, email, subject, message }, res);
 
   } catch (error) {
     console.error('Error sending contact form email:', error);
