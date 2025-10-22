@@ -45,6 +45,12 @@ async function sendWithResend(resend, { name, email, subject, message }, res) {
   });
   
   console.log('✅ Main email sent successfully:', mainEmailResult.data?.id);
+  console.log('📧 Email details:', {
+    from: 'Vix Contact Form <onboarding@resend.dev>',
+    to: ['hello@vixsolutions.co.il'],
+    subject: `הודעה חדשה מ-${name}: ${subject}`,
+    resendResponse: mainEmailResult
+  });
 
   // Send confirmation email to the user
   console.log('Sending confirmation email via Resend...');
@@ -85,6 +91,12 @@ async function sendWithResend(resend, { name, email, subject, message }, res) {
   });
   
   console.log('✅ Confirmation email sent successfully:', confirmationResult.data?.id);
+  console.log('📧 Confirmation email details:', {
+    from: 'Vix Solutions <onboarding@resend.dev>',
+    to: [email],
+    subject: 'תודה על פנייתך - Vix Solutions',
+    resendResponse: confirmationResult
+  });
 
   res.status(200).json({ 
     success: true, 
@@ -222,29 +234,14 @@ export async function handleContactForm(req, res) {
   }
 
   try {
-    // Check if we're in production (Railway) or development
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    if (isProduction) {
-      // Production: Use Resend (Railway-compatible)
-      if (!process.env.RESEND_API_KEY) {
-        console.error('Missing Resend API key for production');
-        return res.status(500).json({ error: 'שירות דואר לא מוגדר' });
-      }
-      
-      console.log('Production mode: Using Resend email service...');
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      return await sendWithResend(resend, { name, email, subject, message }, res);
-    } else {
-      // Development: Use Gmail SMTP (works locally)
-      if (!process.env.VIX_EMAIL || !process.env.VIX_EMAIL_PASS) {
-        console.error('Missing Gmail credentials for development');
-        return res.status(500).json({ error: 'שירות דואר לא מוגדר' });
-      }
-      
-      console.log('Development mode: Using Gmail SMTP...');
-      return await sendWithGmail({ name, email, subject, message }, res);
+    // Always use Gmail SMTP (like the Footer contact form)
+    if (!process.env.VIX_EMAIL || !process.env.VIX_EMAIL_PASS) {
+      console.error('Missing Gmail credentials');
+      return res.status(500).json({ error: 'שירות דואר לא מוגדר' });
     }
+    
+    console.log('Using Gmail SMTP (like Footer contact form)...');
+    return await sendWithGmail({ name, email, subject, message }, res);
 
   } catch (error) {
     console.error('Error sending contact form email:', error);
