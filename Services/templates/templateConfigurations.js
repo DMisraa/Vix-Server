@@ -175,6 +175,9 @@ export function getTemplateConfiguration(templateName, event, contact) {
   const configurations = {
     'event_invitation': configureFirstEventInvitation,
     'first_event_invitation': configureFirstEventInvitation, // Backward compatibility - old name
+    'reminder_1': configureInvitationFollowup, // First reminder
+    'reminder_2': configureInvitationFollowup, // Second reminder
+    'reminder_3': configureInvitationFollowup, // Third reminder
     'invitation_followup': configureInvitationFollowup,
     'second_reminder': configureSecondReminder,
     'thank_you_note': configureThankYouNote,
@@ -207,6 +210,9 @@ export function templateRequiresImage(templateName) {
   const templatesWithImages = [
     'event_invitation',
     'first_event_invitation', // Backward compatibility
+    'reminder_1',
+    'reminder_2', 
+    'reminder_3',
     'event_directions'
   ];
   
