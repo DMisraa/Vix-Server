@@ -143,6 +143,101 @@ function configureInvitationFollowup(event, contact) {
 }
 
 /**
+ * Template: reminder_1
+ * 
+ * Body: היי! 👋
+ * עוד רגע זה קורה 🎊
+ * ה{{variable_1}} של {{variable_2}} כבר בפתח - ביום {{variable_3}}, בתאריך {{variable_4}}, ב{{variable_5}}.
+ * קבלת פנים מתחילה בשעה {{variable_6}}.
+ * אם עדיין לא אישרתם הגעה – נשמח שתעדכנו 😊
+ * הנוכחות שלכם חשובה לנו מאוד 💖
+ * 
+ * Variables:
+ * 1. Event type (חתונה, בר מצווה, etc.)
+ * 2. Celebrators names
+ * 3. Day of week
+ * 4. Date (DD.MM.YYYY)
+ * 5. Location/Venue
+ * 6. Time
+ */
+function configureReminder1(event, contact) {
+  return {
+    guestName: contact.display_name || contact.canonical_form || 'אורח',
+    eventName: getEventTypeHebrew(event.event_type),              // Variable 1
+    eventDate: getCelebratorsNames(event),                        // Variable 2
+    eventLocation: getDayOfWeek(event.event_date),                // Variable 3
+    customParams: [
+      formatEventDate(event.event_date) || '',                   // Variable 4
+      event.venue_name || event.location || '',                  // Variable 5
+      event.event_time || ''                                     // Variable 6
+    ].filter(Boolean)
+  };
+}
+
+/**
+ * Template: reminder_2
+ * 
+ * Body: היי חברים! 😄
+ * שמעתם כבר? ה{{variable_1}} של {{variable_2}} ממש מעבר לפינה 🎉
+ * אם עוד לא הספקתם לאשר הגעה - זה הזמן!
+ * יום {{variable_3}}, {{variable_4}}, ב-{{variable_5}}.
+ * קבלת הפנים מתחילה בשעה {{variable_6}}.
+ * אנחנו מתכוננים לערב מדהים ורוצים לדעת אם נרקוד יחד 😉
+ * 
+ * Variables:
+ * 1. Event type (חתונה, בר מצווה, etc.)
+ * 2. Celebrators names
+ * 3. Day of week
+ * 4. Date (DD.MM.YYYY)
+ * 5. Location/Venue
+ * 6. Time
+ */
+function configureReminder2(event, contact) {
+  return {
+    guestName: contact.display_name || contact.canonical_form || 'אורח',
+    eventName: getEventTypeHebrew(event.event_type),              // Variable 1
+    eventDate: getCelebratorsNames(event),                        // Variable 2
+    eventLocation: getDayOfWeek(event.event_date),                // Variable 3
+    customParams: [
+      formatEventDate(event.event_date) || '',                   // Variable 4
+      event.venue_name || event.location || '',                  // Variable 5
+      event.event_time || ''                                     // Variable 6
+    ].filter(Boolean)
+  };
+}
+
+/**
+ * Template: reminder_3
+ * 
+ * Body: הלו! 📣
+ * זה אנחנו שוב 😆
+ * {{variable_1}} פשוט רוצים לדעת אם אתם באים ל{{variable_2}} ביום {{variable_3}}, בתאריך {{variable_4}}, ב-{{variable_5}}.
+ * האירוע מתחיל בשעה {{variable_6}}.
+ * תענו לנו כבר יא אלופים – שנדע אם לשמור לכם מקום! 😜
+ * 
+ * Variables:
+ * 1. Celebrators names
+ * 2. Event type (חתונה, בר מצווה, etc.)
+ * 3. Day of week
+ * 4. Date (DD.MM.YYYY)
+ * 5. Location/Venue
+ * 6. Time
+ */
+function configureReminder3(event, contact) {
+  return {
+    guestName: contact.display_name || contact.canonical_form || 'אורח',
+    eventName: getCelebratorsNames(event),                        // Variable 1 (Celebrators)
+    eventDate: getEventTypeHebrew(event.event_type),              // Variable 2 (Event type)
+    eventLocation: getDayOfWeek(event.event_date),                // Variable 3 (Day of week)
+    customParams: [
+      formatEventDate(event.event_date) || '',                   // Variable 4 (Date)
+      event.venue_name || event.location || '',                  // Variable 5 (Location)
+      event.event_time || ''                                     // Variable 6 (Time)
+    ].filter(Boolean)
+  };
+}
+
+/**
  * Template: second_reminder (Legacy - kept for backward compatibility)
  */
 function configureSecondReminder(event, contact) {
@@ -175,9 +270,9 @@ export function getTemplateConfiguration(templateName, event, contact) {
   const configurations = {
     'event_invitation': configureFirstEventInvitation,
     'first_event_invitation': configureFirstEventInvitation, // Backward compatibility - old name
-    'reminder_1': configureInvitationFollowup, // First reminder
-    'reminder_2': configureInvitationFollowup, // Second reminder
-    'reminder_3': configureInvitationFollowup, // Third reminder
+    'reminder_1': configureReminder1, // First reminder
+    'reminder_2': configureReminder2, // Second reminder
+    'reminder_3': configureReminder3, // Third reminder
     'invitation_followup': configureInvitationFollowup,
     'second_reminder': configureSecondReminder,
     'thank_you_note': configureThankYouNote,
