@@ -40,7 +40,6 @@ function calculateDaysBetween(date1, date2) {
  */
 export function getFollowUpButtons(eventDate) {
   if (!eventDate) {
-    console.warn('No event date provided, using default buttons');
     return getDefaultButtons();
   }
   
@@ -49,11 +48,8 @@ export function getFollowUpButtons(eventDate) {
   
   const daysUntilEvent = calculateDaysBetween(today, eventDate);
   
-  console.log(`📅 Days until event: ${daysUntilEvent}`);
-  
   // More than 17 days away - show all 3 buttons
   if (daysUntilEvent > 17) {
-    console.log('✅ Event is >14 days away - showing all 3 buttons');
     return [
       {
         type: 'reply',
@@ -81,7 +77,6 @@ export function getFollowUpButtons(eventDate) {
   
   // 10-17 days away - show 3 days and 1 week
   if (daysUntilEvent >= 10 && daysUntilEvent <= 17) {
-    console.log('✅ Event is 10-14 days away - showing 3 days and 1 week buttons');
     return [
       {
         type: 'reply',
@@ -102,7 +97,6 @@ export function getFollowUpButtons(eventDate) {
   
   // 7-9 days away - special case: show 3 days and 5 days
   if (daysUntilEvent >= 7 && daysUntilEvent <= 9) {
-    console.log('✅ Event is 7-9 days away - showing 3 days and 5 days buttons');
     return [
       {
         type: 'reply',
@@ -123,7 +117,6 @@ export function getFollowUpButtons(eventDate) {
   
   // 5-6 days away - show only 3 days button
   if (daysUntilEvent >= 5 && daysUntilEvent <= 6) {
-    console.log('✅ Event is 5-6 days away - showing only 3 days button');
     return [
       {
         type: 'reply',
@@ -137,7 +130,6 @@ export function getFollowUpButtons(eventDate) {
   
   // 4 days away - show 2 days button only
   if (daysUntilEvent === 4) {
-    console.log('✅ Event is 4 days away - showing 2 days button');
     return [
       {
         type: 'reply',
@@ -151,7 +143,6 @@ export function getFollowUpButtons(eventDate) {
   
   // 3 days away - show 2 days and tomorrow buttons
   if (daysUntilEvent === 3) {
-    console.log('✅ Event is 3 days away - showing 2 days and tomorrow buttons');
     return [
       {
         type: 'reply',
@@ -172,7 +163,6 @@ export function getFollowUpButtons(eventDate) {
   
   // 2 days away - show tomorrow button
   if (daysUntilEvent === 2) {
-    console.log('✅ Event is 2 days away - showing tomorrow button');
     return [
       {
         type: 'reply',
@@ -185,7 +175,6 @@ export function getFollowUpButtons(eventDate) {
   }
   
   // Less than 2 days (1 day, today, or passed) - return special indicator for message-only response
-  console.warn('⚠️  Event is very close (< 2 days) - returning special indicator for message-only response');
   return 'too_close'; // Special return value to indicate message-only response
 }
 

@@ -21,7 +21,6 @@ export async function markMessageAsRead(messageId, phoneNumber) {
     const apiKey = process.env.D360_API_KEY;
     
     if (!apiKey) {
-      console.error('D360_API_KEY not configured');
       return;
     }
 
@@ -39,14 +38,11 @@ export async function markMessageAsRead(messageId, phoneNumber) {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`Failed to mark message as read: ${error}`);
-    } else {
-      console.log(`Message ${messageId} marked as read`);
+      const errorText = await response.text();
+      console.error(`❌ Mark as read failed (${response.status}): ${errorText}`);
     }
   } catch (error) {
-    // Don't throw - marking as read is optional, shouldn't break message processing
-    console.error('Error marking message as read:', error);
+    console.error('❌ Mark as read error:', error.message);
   }
 }
 
@@ -60,13 +56,10 @@ export async function sendGuestCountQuestion(phoneNumber) {
     const apiKey = process.env.D360_API_KEY;
     
     if (!apiKey) {
-      console.error('D360_API_KEY not configured');
       return;
     }
     
     const messageText = 'מעולה! 🎉\n\nכמה אורחים יגיעו?\nאנא השב עם מספר בלבד (לדוגמה: 2)';
-    
-    console.log(`📤 Sending guest count question to ${phoneNumber}`);
     
     const response = await fetch('https://waba-v2.360dialog.io/messages', {
       method: 'POST',
@@ -83,16 +76,17 @@ export async function sendGuestCountQuestion(phoneNumber) {
         }
       }),
     });
-    
+
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`Failed to send guest count question: ${error}`);
+      const errorText = await response.text();
+      console.error(`❌ Guest count question failed (${response.status}): ${errorText}`);
     } else {
-      console.log(`✅ Guest count question sent to ${phoneNumber}`);
+      const successData = await response.json();
+      console.log(`✅ Guest count question sent: ${successData.messages?.[0]?.id || 'no-id'}`);
     }
     
   } catch (error) {
-    console.error('Error sending guest count question:', error);
+    console.error('❌ Guest count question error:', error.message);
   }
 }
 
@@ -106,7 +100,6 @@ export async function sendInvalidGuestCountMessage(phoneNumber) {
     const apiKey = process.env.D360_API_KEY;
     
     if (!apiKey) {
-      console.error('D360_API_KEY not configured');
       return;
     }
     
@@ -127,14 +120,14 @@ export async function sendInvalidGuestCountMessage(phoneNumber) {
         }
       }),
     });
-    
+
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`Failed to send invalid guest count message: ${error}`);
+      const errorText = await response.text();
+      console.error(`❌ Invalid guest count message failed (${response.status}): ${errorText}`);
     }
     
   } catch (error) {
-    console.error('Error sending invalid guest count message:', error);
+    console.error('❌ Invalid guest count message error:', error.message);
   }
 }
 
@@ -149,7 +142,6 @@ export async function sendGuestCountConfirmation(phoneNumber, guestCount) {
     const apiKey = process.env.D360_API_KEY;
     
     if (!apiKey) {
-      console.error('D360_API_KEY not configured');
       return;
     }
     
@@ -170,16 +162,17 @@ export async function sendGuestCountConfirmation(phoneNumber, guestCount) {
         }
       }),
     });
-    
+
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`Failed to send guest count confirmation: ${error}`);
+      const errorText = await response.text();
+      console.error(`❌ Guest count confirmation failed (${response.status}): ${errorText}`);
     } else {
-      console.log(`✅ Guest count confirmation sent to ${phoneNumber}`);
+      const successData = await response.json();
+      console.log(`✅ Guest count confirmation sent: ${successData.messages?.[0]?.id || 'no-id'}`);
     }
     
   } catch (error) {
-    console.error('Error sending guest count confirmation:', error);
+    console.error('❌ Guest count confirmation error:', error.message);
   }
 }
 
@@ -193,13 +186,10 @@ export async function sendDeclineConfirmation(phoneNumber) {
     const apiKey = process.env.D360_API_KEY;
     
     if (!apiKey) {
-      console.error('D360_API_KEY not configured');
       return;
     }
     
     const messageText = 'תודה על עדכון! נשמח לראותך באירועים הבאים 💙';
-    
-    console.log(`📤 Sending decline confirmation to ${phoneNumber}`);
     
     const response = await fetch('https://waba-v2.360dialog.io/messages', {
       method: 'POST',
@@ -216,16 +206,17 @@ export async function sendDeclineConfirmation(phoneNumber) {
         }
       }),
     });
-    
+
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`Failed to send decline confirmation: ${error}`);
+      const errorText = await response.text();
+      console.error(`❌ Decline confirmation failed (${response.status}): ${errorText}`);
     } else {
-      console.log(`✅ Decline confirmation sent to ${phoneNumber}`);
+      const successData = await response.json();
+      console.log(`✅ Decline confirmation sent: ${successData.messages?.[0]?.id || 'no-id'}`);
     }
     
   } catch (error) {
-    console.error('Error sending decline confirmation:', error);
+    console.error('❌ Decline confirmation error:', error.message);
   }
 }
 
@@ -252,20 +243,14 @@ export async function sendMaybeConfirmation(phoneNumber, eventDate = null, celeb
     const apiKey = process.env.D360_API_KEY;
     
     if (!apiKey) {
-      console.error('D360_API_KEY not configured');
       return;
     }
-    
-    console.log(`📤 Sending maybe confirmation to ${phoneNumber}`);
-    console.log(`📅 Event date: ${eventDate}`);
     
     // Get dynamic buttons based on event proximity
     const buttons = getFollowUpButtons(eventDate);
     
     // Check if event is too close (< 2 days) - send text message only
     if (buttons === 'too_close') {
-      console.log('⚠️  Event is too close - sending text message without buttons');
-      
       const messageText = getEventTooCloseMessage(celebrator1Name, celebrator2Name);
       
       const payload = {
@@ -283,20 +268,19 @@ export async function sendMaybeConfirmation(phoneNumber, eventDate = null, celeb
         },
         body: JSON.stringify(payload),
       });
-      
+
       if (!response.ok) {
-        const error = await response.text();
-        console.error(`Failed to send too-close message: ${error}`);
+        const errorText = await response.text();
+        console.error(`❌ Too-close message failed (${response.status}): ${errorText}`);
       } else {
-        console.log(`✅ Event-too-close message sent to ${phoneNumber}`);
+        const successData = await response.json();
+        console.log(`✅ Too-close message sent: ${successData.messages?.[0]?.id || 'no-id'}`);
       }
       
       return;
     }
     
     // Send interactive message with buttons
-    console.log(`📋 Showing ${buttons.length} follow-up button(s):`, buttons.map(b => b.reply.title).join(', '));
-    
     const payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
@@ -321,16 +305,17 @@ export async function sendMaybeConfirmation(phoneNumber, eventDate = null, celeb
       },
       body: JSON.stringify(payload),
     });
-    
+
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`Failed to send maybe confirmation: ${error}`);
+      const errorText = await response.text();
+      console.error(`❌ Maybe confirmation failed (${response.status}): ${errorText}`);
     } else {
-      console.log(`✅ Maybe confirmation with ${buttons.length} button(s) sent to ${phoneNumber}`);
+      const successData = await response.json();
+      console.log(`✅ Maybe confirmation sent: ${successData.messages?.[0]?.id || 'no-id'}`);
     }
     
   } catch (error) {
-    console.error('Error sending maybe confirmation:', error);
+    console.error('❌ Maybe confirmation error:', error.message);
   }
 }
 

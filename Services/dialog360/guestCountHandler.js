@@ -32,8 +32,6 @@ export async function handleGuestCountReply(client, eventMessageId, eventId, con
     const guestCount = parseInt(replyText.trim());
     
     if (isNaN(guestCount) || guestCount < 1 || guestCount > 99) {
-      console.warn(`⚠️  Invalid guest count: "${replyText}"`);
-      
       // Send error message asking to reply with a valid number
       const phoneNumber = await getContactPhoneNumber(contactId);
       
@@ -47,8 +45,6 @@ export async function handleGuestCountReply(client, eventMessageId, eventId, con
     // Update guests_coming with the actual count and clear awaiting flag
     await updateGuestCount(eventMessageId, guestCount);
     
-    console.log(`✅ Updated guest count for contact ${contactId} in event ${eventId}: ${guestCount} guests`);
-    
     // Send confirmation message
     const phoneNumber = await getContactPhoneNumber(contactId);
     
@@ -57,7 +53,6 @@ export async function handleGuestCountReply(client, eventMessageId, eventId, con
     }
     
   } catch (error) {
-    console.error('Error handling guest count reply:', error);
     throw error;
   }
 }

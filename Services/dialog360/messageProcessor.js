@@ -37,15 +37,12 @@ export async function processDialog360Message(message, value) {
     const timestamp = message.timestamp;
     const messageType = message.type;
 
-    console.log('Received message:', { messageId, from, type: messageType });
-
     // Mark message as read (shows colored ticks to sender)
     await markMessageAsRead(messageId, from);
 
     switch (messageType) {
       case 'text':
         const textContent = message.text?.body;
-        console.log(`Text from ${from}: ${textContent}`);
         
         // Update database with text response
         await updateEventMessageResponse(from, textContent, timestamp, null, 'text');
@@ -53,34 +50,27 @@ export async function processDialog360Message(message, value) {
 
       case 'image':
         const imageId = message.image?.id;
-        console.log(`Image from ${from}, ID: ${imageId}`);
         // DB logic
         break;
 
       case 'document':
         const documentId = message.document?.id;
-        console.log(`Document from ${from}, ID: ${documentId}`);
         // DB logic
         break;
 
       case 'audio':
         const audioId = message.audio?.id;
-        console.log(`Audio from ${from}, ID: ${audioId}`);
         // DB logic
         break;
 
       case 'video':
         const videoId = message.video?.id;
-        console.log(`Video from ${from}, ID: ${videoId}`);
         // DB logic
         break;
 
       case 'button':
         const buttonText = message.button?.text;
         const buttonPayload = message.button?.payload;
-        console.log(
-          `Quick reply from ${from}: ${buttonText} (payload: ${buttonPayload})`
-        );
         
         // Update database with RSVP response
         await updateEventMessageResponse(from, buttonText, timestamp, buttonPayload);
@@ -92,9 +82,6 @@ export async function processDialog360Message(message, value) {
           const buttonReplyText =
             message.interactive.button_reply?.title || '';
           const buttonReplyId = message.interactive.button_reply?.id || '';
-          console.log(
-            `Interactive reply from ${from}: ${buttonReplyText} (payload: ${buttonReplyId})`
-          );
           
           // Update database with RSVP response
           await updateEventMessageResponse(from, buttonReplyText, timestamp, buttonReplyId);
@@ -102,10 +89,10 @@ export async function processDialog360Message(message, value) {
         break;
 
       default:
-        console.log(`Unsupported message type: ${messageType}`);
+        break;
     }
   } catch (error) {
-    console.error('Error processing message:', error);
+    // Silently fail
   }
 }
 
@@ -123,17 +110,12 @@ export async function processDialog360Status(status, value) {
     const statusType = status.status; // 'sent', 'delivered', 'read', 'failed'
     const timestamp = status.timestamp; // Unix timestamp
 
-    console.log('📱 Status update:', { messageId, recipientId, status: statusType });
-
     // Find the event_message record by message_id (needed for both read and failed)
     const eventMessage = await findEventMessageByMessageId(messageId);
     
     if (!eventMessage) {
-      console.log(`ℹ️  No event_message found for message_id: ${messageId}`);
       return;
     }
-    
-    console.log(`✅ Found event_message ${eventMessage.id} for message_id ${messageId}`);
     
     // Convert WhatsApp timestamp to JavaScript Date
     const statusTime = new Date(parseInt(timestamp) * 1000);
@@ -141,7 +123,6 @@ export async function processDialog360Status(status, value) {
     // Track "read" status - when guest opens the invitation
     if (statusType === 'read') {
       await updateMessageSeenAt(eventMessage.id, statusTime);
-      console.log(`✅ Guest ${recipientId} opened invitation at ${statusTime.toISOString()}`);
       
     // Track "failed" status - when delivery fails
     } else if (statusType === 'failed') {
@@ -152,36 +133,14 @@ export async function processDialog360Status(status, value) {
       if (errors.length > 0) {
         const errorDetails = errors[0].error_data?.details || errors[0].message || 'No details provided';
         failureReason = errorDetails;
-        
-        // Log specific error types for monitoring
-        if (errorDetails.includes('experiment')) {
-          console.error(`❌ Delivery failed - WhatsApp Beta/Experiment: ${recipientId}`);
-        } else if (errorDetails.includes('blocked')) {
-          console.error(`❌ Delivery failed - User blocked business: ${recipientId}`);
-        } else if (errorDetails.includes('not registered')) {
-          console.error(`❌ Delivery failed - Number not on WhatsApp: ${recipientId}`);
-        } else {
-          console.error(`❌ Delivery failed - ${errorDetails}: ${recipientId}`);
-        }
       }
       
       // Save failure reason to database
       await updateMessageFailure(eventMessage.id, failureReason);
-      console.log(`❌ Message failure logged for ${recipientId}: ${failureReason}`);
-      
-      // Log the complete meta error object for debugging (at the end to avoid log interleaving)
-      console.error(`\n========== FULL META ERROR OBJECT START ==========`);
-      console.error(`Recipient: ${recipientId}`);
-      console.error(JSON.stringify(status, null, 2));
-      console.error(`========== FULL META ERROR OBJECT END ==========\n`);
-      
-    } else {
-      console.log(`ℹ️  Ignoring ${statusType} status (we track 'read' and 'failed')`);
     }
     
   } catch (error) {
-    console.error('Error processing status update:', error);
-    console.error('Error details:', error.stack);
+    // Silently fail
   }
 }
 
@@ -198,14 +157,6 @@ export async function processDialog360Error(error, value) {
     const errorMessage = error.message;
     const errorDetails = error.error_data?.details;
 
-    console.error('Dialog 360 Error received:', {
-      code: errorCode,
-      title: errorTitle,
-      message: errorMessage,
-      details: errorDetails,
-      timestamp: new Date().toISOString()
-    });
-
     // ✅ Add error handling logic here:
     // - Log to monitoring system (e.g., Sentry)
     // - Save to database for tracking
@@ -220,7 +171,7 @@ export async function processDialog360Error(error, value) {
     // - etc.
 
   } catch (err) {
-    console.error('Error processing Dialog 360 error notification:', err);
+    // Silently fail
   }
 }
 
@@ -251,7 +202,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
       
       if (payloadMatch) {
         eventId = payloadMatch[2];
-        console.log(`✅ Extracted event_id from payload: ${eventId}`);
       }
     }
     
@@ -259,7 +209,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     const contact = await findContactByPhoneNumber(phoneNumber, eventId);
     
     if (!contact) {
-      console.warn(`⚠️  Contact not found for phone number: ${phoneNumber}${eventId ? ` and event: ${eventId}` : ''}`);
       await client.query('ROLLBACK');
       return;
     }
@@ -293,7 +242,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
       
       if (eventMessageResult.rows.length > 0) {
         eventMessageId = eventMessageResult.rows[0].id;
-        console.log(`✅ Found event_message_id ${eventMessageId} for event ${eventId} + contact ${contactId}`);
       } else {
         // No pending invitation found - get event and contact details for debugging
         const eventDetailsResult = await client.query(
@@ -322,7 +270,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
         );
         
         const errorMsg = `[DEBUG] No pending invitation found. Event: ${eventName} (${eventId}) | Owner: ${ownerEmail} | Contact: ${contactName} (ID: ${contactId}) | Phone: ${phoneNumber} | Payload: ${payload} | Response may have already been recorded.`;
-        console.error(`❌ ${errorMsg}`);
         
         if (anyInvitationResult.rows.length > 0) {
           // Found an invitation - update it with error
@@ -332,11 +279,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
              WHERE id = $2`,
             [errorMsg, anyInvitationResult.rows[0].id]
           );
-          console.log(`📝 Error saved to existing invitation record (id: ${anyInvitationResult.rows[0].id})`);
-        } else {
-          // No invitation record exists at all - just log to console, don't create record
-          console.error(`📝 No invitation record found - cannot save error to database`);
-          console.error(`   Skipping database insert to avoid constraint violation`);
         }
         
         await client.query('COMMIT');
@@ -346,8 +288,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     
     // Check if this is a follow-up timeframe button (for "maybe" responses)
     if (payload && payload.startsWith('followup_')) {
-      console.log(`📅 Follow-up button clicked: ${payload}`);
-      
       // Find the most recent "לא בטוח" (maybe) invitation for this contact
       const maybeInvitationResult = await client.query(
         `SELECT id FROM event_messages 
@@ -374,8 +314,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
           [followupDate, eventMessageId]
         );
         
-        console.log(`✅ Follow-up date set for contact ${contactId}: ${followupDate}`);
-        
         // Send confirmation
         await client.query('COMMIT');
         
@@ -393,10 +331,7 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
             text: { body: confirmationText }
           }),
         });
-        
-        console.log(`✅ Follow-up confirmation sent to ${phoneNumber}`);
       } else {
-        console.warn(`⚠️  No "maybe" invitation found for contact ${contactId}`);
         await client.query('ROLLBACK');
       }
       
@@ -405,8 +340,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     
     // If no eventMessageId from payload, try to find most recent pending invitation
     if (!eventMessageId) {
-      console.warn(`⚠️  No eventId from payload - looking for most recent pending invitation for contact ${contactId}`);
-      
       // Find most recent pending invitation for this contact (no event_id filter needed)
       const fallbackResult = await client.query(
         `SELECT em.id, em.event_id 
@@ -422,7 +355,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
       if (fallbackResult.rows.length > 0) {
         eventMessageId = fallbackResult.rows[0].id;
         eventId = fallbackResult.rows[0].event_id; // Set eventId for later use
-        console.log(`✅ Fallback: Found pending invitation ${eventMessageId} for event ${eventId}`);
       } else {
         // No pending invitation found - try ANY recent invitation
         const anyRecentResult = await client.query(
@@ -439,7 +371,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
         if (anyRecentResult.rows.length > 0) {
           const row = anyRecentResult.rows[0];
           const errorMsg = `[DEBUG] No pending invitation found (response already recorded). Event: ${row.event_name || 'unknown'} (${row.event_id || 'unknown'}) | Owner: ${row.owner_email || 'unknown'} | Contact ID: ${contactId} | Phone: ${phoneNumber} | Message type: ${messageType}`;
-          console.error(`❌ ${errorMsg}`);
           
           await client.query(
             `UPDATE event_messages 
@@ -447,9 +378,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
              WHERE id = $2`,
             [errorMsg, row.id]
           );
-          console.log(`📝 Error saved to invitation record (id: ${row.id})`);
-        } else {
-          console.error(`❌ No invitation found for contact ${contactId} at all - cannot process response`);
         }
         
         await client.query('COMMIT');
@@ -464,12 +392,9 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     
     // If no mapped response, skip processing
     if (!mappedResponse) {
-      console.log(`ℹ️  Skipping unrecognized message for contact ${contactId}: "${replyText}"`);
       await client.query('ROLLBACK');
       return;
     }
-    
-    console.log(`📝 Invitation response mapped: "${replyText}" -> "${mappedResponse}"`);
     
     // Update the event_messages record with the response
     await updateMessageResponse(eventMessageId, mappedResponse, responseTime);
@@ -489,15 +414,10 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
         eventDate = eventInfoResult.rows[0].event_date;
         celebrator1Name = eventInfoResult.rows[0].celebrator1_name;
         celebrator2Name = eventInfoResult.rows[0].celebrator2_name;
-        
-        console.log(`📅 Fetched event info - Date: ${eventDate}, Celebrators: ${celebrator1Name || 'N/A'} & ${celebrator2Name || 'N/A'}`);
-      } else {
-        console.warn('⚠️  No event info found - using defaults');
       }
     }
     
     await client.query('COMMIT');
-    console.log(`✅ Updated response for contact ${contactId} in event ${eventId}: ${mappedResponse}`);
     
     // Send appropriate follow-up message based on response type
     if (mappedResponse === 'מגיע') {
@@ -516,7 +436,6 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Error updating event message response:', error);
   } finally {
     client.release();
   }

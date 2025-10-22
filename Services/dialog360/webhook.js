@@ -31,9 +31,6 @@ import {
  */
 export async function handleDialog360Webhook(req, res) {
   try {
-    // Log incoming webhook for debugging
-    console.log('Dialog 360 webhook received:', JSON.stringify(req.body, null, 2));
-
     const { entry } = req.body;
 
     // ✅ CRITICAL: Respond immediately within 5-second hard limit
@@ -43,8 +40,6 @@ export async function handleDialog360Webhook(req, res) {
 
     // Validate payload after responding
     if (!entry || !Array.isArray(entry)) {
-      console.warn('Invalid webhook payload - missing or invalid entry array');
-      console.log('Received payload:', req.body);
       return;
     }
 
@@ -52,9 +47,6 @@ export async function handleDialog360Webhook(req, res) {
     processEntriesAsync(entry);
 
   } catch (error) {
-    console.error('Error in handleDialog360Webhook:', error);
-    console.error('Error details:', error.stack);
-    
     // Always return 200 to prevent Dialog 360 from retrying
     if (!res.headersSent) {
       res.status(200).json({
@@ -113,7 +105,7 @@ async function processEntriesAsync(entry) {
       })
     );
   } catch (error) {
-    console.error('Error in background message processing:', error);
+    // Silently fail - errors already logged in individual processors
   }
 }
 
