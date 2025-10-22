@@ -41,14 +41,76 @@ export async function handleContactForm(req, res) {
     }
 
     console.log('Creating email transporter...');
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.VIX_EMAIL,
-        pass: process.env.VIX_EMAIL_PASS,
-      },
+    console.log('Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      VIX_EMAIL: process.env.VIX_EMAIL ? 'SET' : 'NOT SET',
+      VIX_EMAIL_PASS: process.env.VIX_EMAIL_PASS ? 'SET' : 'NOT SET',
+      VERCEL: process.env.VERCEL ? 'YES' : 'NO'
     });
+    
+    // Try different SMTP configurations for Vercel
+    const smtpConfigs = [
+      // Config 1: Standard Gmail SMTP
+      {
+        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.VIX_EMAIL,
+          pass: process.env.VIX_EMAIL_PASS,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
+        pool: false,
+        tls: {
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3'
+        }
+      },
+      // Config 2: Alternative Gmail SMTP (port 465)
+      {
+        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+          user: process.env.VIX_EMAIL,
+          pass: process.env.VIX_EMAIL_PASS,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
+        pool: false,
+        tls: {
+          rejectUnauthorized: false
+        }
+      }
+    ];
+
+    let transporter = null;
+    let workingConfig = null;
+
+    // Try each configuration until one works
+    for (let i = 0; i < smtpConfigs.length; i++) {
+      const config = smtpConfigs[i];
+      console.log(`Trying SMTP config ${i + 1}: port ${config.port}, secure: ${config.secure}`);
+      
+      try {
+        const testTransporter = nodemailer.createTransport(config);
+        await testTransporter.verify();
+        console.log(`✅ SMTP config ${i + 1} works!`);
+        transporter = testTransporter;
+        workingConfig = config;
+        break;
+      } catch (configError) {
+        console.log(`❌ SMTP config ${i + 1} failed:`, configError.message);
+        if (i === smtpConfigs.length - 1) {
+          throw new Error(`All SMTP configurations failed. Last error: ${configError.message}`);
+        }
+      }
+    }
 
     // Email content
     const mailOptions = {
@@ -90,7 +152,7 @@ export async function handleContactForm(req, res) {
       replyTo: email
     };
 
-    // Send email
+    // Send email (connection already verified above)
     console.log('Sending contact form email...');
     await transporter.sendMail(mailOptions);
     console.log('Contact form email sent successfully');
