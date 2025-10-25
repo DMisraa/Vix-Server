@@ -16,7 +16,7 @@ import { calculateFollowupDate, getFollowupDisplayText } from './followUpButtons
 
 // WhatsApp contact upload functions (moved from whatsappListener.js)
 const TOKEN_PREFIX = 'VIX_';
-const TOKEN_EXPIRY_DAYS = 30; // 30 days expiry
+const TOKEN_EXPIRY_DAYS = 10; // 10 days expiry
 
 /**
  * Parse token and extract user information
@@ -38,7 +38,7 @@ function parseToken(token) {
         // Convert base36 timestamp back to milliseconds
         const timestamp = parseInt(timestampBase36, 36);
         const tokenAge = Date.now() - timestamp;
-        const maxAge = TOKEN_EXPIRY_DAYS * 15 * 24 * 60 * 60 * 1000; // 15 days in milliseconds
+        const maxAge = TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 10 days in milliseconds
 
         if (tokenAge > maxAge) {
             console.log(`Token expired: ${tokenAge}ms old (max: ${maxAge}ms)`);
@@ -63,13 +63,30 @@ function parseToken(token) {
  */
 async function findUserByHash(userHash) {
     try {
-        const query = `
-            SELECT id, email, name 
-            FROM users 
-            WHERE encode(email::bytea, 'base64') LIKE $1
-        `;
-        const result = await pool.query(query, [`%${userHash}%`]);
-        return result.rows[0] || null;
+        console.log('🔍 Looking for user with hash:', userHash);
+        
+        // Get all users and test hash generation locally
+        const allUsersQuery = `SELECT id, email, name FROM users`;
+        const allUsers = await pool.query(allUsersQuery);
+        
+        console.log(`🔍 Found ${allUsers.rows.length} users in database`);
+        
+        for (const user of allUsers.rows) {
+            // Generate hash the same way as frontend
+            const generatedHash = Buffer.from(user.email).toString('base64')
+                .replace(/[^a-zA-Z0-9]/g, '')
+                .substring(0, 8);
+            
+            console.log(`🔍 Testing user ${user.email}: generated hash = ${generatedHash}, looking for = ${userHash}`);
+            
+            if (generatedHash === userHash) {
+                console.log(`✅ Found matching user:`, user);
+                return user;
+            }
+        }
+        
+        console.log('❌ No user found with matching hash');
+        return null;
     } catch (error) {
         console.error('Error finding user by hash:', error);
         return null;
@@ -619,60 +636,66 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
     console.log('🔍 Checking WhatsApp contact upload:', {
       messageText,
       senderNumber,
-      hasToken: /VIX_[A-Z0-9_]+/.test(messageText)
+      hasToken: /VIX_[A-Z0-9]+_[A-Z0-9]+_[A-Z0-9]+/.test(messageText)
     });
 
-    // Check if message contains a token
-    const tokenMatch = messageText.match(/VIX_[A-Z0-9_]+/);
+    // Check if message contains a token (works even if message is just the token)
+    // More specific regex to match valid token format: VIX_[hash]_[timestamp]_[random]
+    const tokenMatch = messageText.match(/VIX_[A-Z0-9]+_[A-Z0-9]+_[A-Z0-9]+/);
     
     if (tokenMatch) {
       // Phase 1: Token validation
       const token = tokenMatch[0];
       console.log('WhatsApp Contact Upload - Token found:', token);
+      console.log('🔍 Full message was:', JSON.stringify(messageText));
       
       const tokenData = parseToken(token);
+      console.log('🔍 Token parsed:', tokenData);
+      
       if (!tokenData || !tokenData.isValid) {
         await sendWhatsAppReply(senderNumber, '❌ הטוקן לא תקין או פג תוקף. אנא נסה שוב.');
         return { handled: true, result: { success: false, message: 'Invalid token' } };
       }
       
+      console.log('🔍 Looking for user with hash:', tokenData.userHash);
       const user = await findUserByHash(tokenData.userHash);
       if (!user) {
         await sendWhatsAppReply(senderNumber, '❌ משתמש לא נמצא. אנא בדוק את הטוקן.');
         return { handled: true, result: { success: false, message: 'User not found' } };
       }
       
-      // Store token for this user (using a simple in-memory store for now)
-      global.activeTokens = global.activeTokens || new Map();
-      global.activeTokens.set(token, {
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)) // 30 days
-      });
+      // Store token in database for persistence
+      await storeTokenInDatabase(token, user.id, user.email, user.name);
       
-      await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את אנשי הקשר שלכם בפורמט:\nשם, טלפון, אימייל (אופציונלי)`);
+      await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את אנשי הקשר שלכם בפורמט:\nשם, טלפון, אימייל (אופציונלי)\n\n⏰ הטוקן פעיל למשך 10 דקות בלבד`);
       return { handled: true, result: { success: true, message: 'Token validated' } };
       
     } else {
-      // Phase 2: Check for contact data (if user has active token)
-      global.activeTokens = global.activeTokens || new Map();
-      let activeUser = null;
-      let activeToken = null;
+      // Phase 2: Check if this message contains contact data
+      // Since tokens are shared with third parties, we need to check if any active token
+      // was recently validated (within a reasonable time window)
+      const recentTokenData = await getRecentlyValidatedToken();
       
-      for (const [token, tokenInfo] of global.activeTokens.entries()) {
-        if (tokenInfo.userId) {
-          activeUser = tokenInfo;
-          activeToken = token;
-          break;
+      if (!recentTokenData) {
+        // Check if there's an expired token (within last 10 minutes but now expired)
+        const expiredTokenData = await getExpiredTokenData();
+        
+        if (expiredTokenData) {
+          // Token was recently active but has now timed out
+          await sendWhatsAppReply(senderNumber, 
+            '⏰ זמן הטוקן פג!\n\n' +
+            'הטוקן שלכם פג תוקף לאחר 10 דקות.\n' +
+            'כל האנשי קשר שנשלחו עד כה נשמרו בהצלחה.\n\n' +
+            'כדי לשלוח אנשי קשר נוספים, אנא שלחו את הטוקן שוב כדי להתחיל תהליך חדש.'
+          );
+          return { handled: true, result: { success: false, message: 'Token timeout' } };
         }
-      }
-      
-      if (!activeUser) {
-        // Not a contact upload message, let it be processed as normal event response
+        
+        // No recently validated token, let it be processed as normal event response
         return { handled: false };
       }
+      
+      const { token: activeToken, user: activeUser } = recentTokenData;
       
       // Parse contact data from message
       const contacts = parseContactData(messageText);
@@ -686,8 +709,7 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       const result = await saveContactsToDatabase(activeUser.userId, contacts, activeUser.userEmail);
       
       if (result.success) {
-        // Remove the token after successful contact save
-        global.activeTokens.delete(activeToken);
+        // Keep token active for future use (only time-based expiration)
         await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות שלכם לבדיקה ואישור.`);
         return { handled: true, result: { success: true, contacts: contacts, uploadId: result.uploadId } };
       } else {
@@ -747,6 +769,223 @@ async function sendWhatsAppReply(phoneNumber, message) {
   }
 }
 
-// Export for debugging
-export { handleWhatsAppContactUpload };
+/**
+ * Store token in users table
+ */
+async function storeTokenInDatabase(token, userId, userEmail, userName) {
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Add columns to users table if they don't exist
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS whatsapp_token VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS whatsapp_token_expires_at TIMESTAMP
+      `);
+      
+      // Update user with token
+      await client.query(`
+        UPDATE users 
+        SET whatsapp_token = $1, 
+            whatsapp_token_expires_at = $2
+        WHERE id = $3
+      `, [
+        token,
+        new Date(Date.now() + (TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)),
+        userId
+      ]);
+      
+      await client.query('COMMIT');
+      console.log(`✅ Token stored in users table: ${token}`);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error storing token in users table:', error);
+  }
+}
+
+
+/**
+ * Get expired token data (was active within last 10 minutes but now expired)
+ * This helps provide better error messages for timeout cases
+ */
+async function getExpiredTokenData() {
+  try {
+    const client = await pool.connect();
+    try {
+      // Find user with token that was active within last 10 minutes but is now expired
+      const tenMinutesAgo = new Date(Date.now() - (10 * 60 * 1000));
+      const now = new Date();
+      
+      const result = await client.query(`
+        SELECT id, email, name, whatsapp_token, whatsapp_token_expires_at
+        FROM users
+        WHERE whatsapp_token IS NOT NULL
+        AND whatsapp_token_expires_at > $1
+        AND whatsapp_token_expires_at < $2
+        ORDER BY whatsapp_token_expires_at DESC
+        LIMIT 1
+      `, [tenMinutesAgo, now]);
+      
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        return {
+          token: row.whatsapp_token,
+          user: {
+            id: row.id,
+            email: row.email,
+            name: row.name
+          }
+        };
+      }
+      
+      return null;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error getting expired token data:', error);
+    return null;
+  }
+}
+
+/**
+ * Get recently validated token (within last 10 minutes)
+ * This allows third parties to send contacts after token validation
+ */
+async function getRecentlyValidatedToken() {
+  try {
+    const client = await pool.connect();
+    try {
+      // Find user with recently validated token (within last 10 minutes)
+      const tenMinutesAgo = new Date(Date.now() - (10 * 60 * 1000));
+      
+      const result = await client.query(`
+        SELECT id, email, name, whatsapp_token, whatsapp_token_expires_at
+        FROM users
+        WHERE whatsapp_token IS NOT NULL
+        AND whatsapp_token_expires_at > NOW()
+        AND whatsapp_token_expires_at > $1
+        ORDER BY whatsapp_token_expires_at DESC
+        LIMIT 1
+      `, [tenMinutesAgo]);
+      
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        return {
+          token: row.whatsapp_token,
+          user: {
+            id: row.id,
+            email: row.email,
+            name: row.name
+          }
+        };
+      }
+      
+      return null;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error getting recently validated token:', error);
+    return null;
+  }
+}
+
+/**
+ * Remove token from database (clear from users table)
+ */
+async function removeTokenFromDatabase(token) {
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query(`
+        UPDATE users 
+        SET whatsapp_token = NULL, 
+            whatsapp_token_expires_at = NULL
+        WHERE whatsapp_token = $1
+      `, [token]);
+      
+      console.log(`✅ Token removed from users table: ${token}`);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error removing token from users table:', error);
+  }
+}
+
+/**
+ * Generate and store a new token for a user
+ */
+async function generateAndStoreToken(userEmail, userName) {
+  try {
+    // Generate token the same way as frontend
+    const timestamp = Date.now().toString(36);
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const userHash = Buffer.from(userEmail).toString('base64')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .substring(0, 8);
+    const token = `VIX_${userHash}_${timestamp}_${randomStr}`.toUpperCase();
+    
+    // Find user in database
+    const user = await findUserByHash(userHash);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    // Store token in database
+    await storeTokenInDatabase(token, user.id, userEmail, userName, 'pending');
+    
+    return token;
+  } catch (error) {
+    console.error('Error generating and storing token:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get active token for a user from users table
+ */
+async function getActiveTokenForUser(userEmail) {
+  try {
+    const client = await pool.connect();
+    try {
+      // Get user with token from users table
+      const result = await client.query(`
+        SELECT whatsapp_token, whatsapp_token_expires_at
+        FROM users
+        WHERE email = $1 
+        AND whatsapp_token IS NOT NULL
+        AND whatsapp_token_expires_at > NOW()
+      `, [userEmail]);
+      
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        return {
+          token: row.whatsapp_token,
+          createdAt: null, // We don't store creation time in users table
+          expiresAt: row.whatsapp_token_expires_at,
+          isValid: true
+        };
+      }
+      
+      return null;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error getting active token for user:', error);
+    return null;
+  }
+}
+
+// Export for debugging and API endpoints
+export { handleWhatsAppContactUpload, generateAndStoreToken, getActiveTokenForUser };
 

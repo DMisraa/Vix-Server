@@ -215,6 +215,102 @@ app.post('/api/debug/whatsapp-test', async (req, res) => {
   }
 });
 
+// Test endpoint for token-only messages
+app.post('/api/debug/token-only-test', async (req, res) => {
+  try {
+    const { token } = req.body;
+    console.log('🧪 Testing token-only message:', token);
+    
+    // Test different message formats
+    const testMessages = [
+      token, // Just the token
+      `שלום! הטוקן שלי הוא: ${token}`, // With Hebrew text
+      `Hello! My token is: ${token}`, // With English text
+      `Token: ${token}`, // Simple format
+      `${token} - please process this`, // Token at start
+      `Please use token ${token} for upload` // Token in middle
+    ];
+    
+    const results = [];
+    const { handleWhatsAppContactUpload } = await import('./Services/dialog360/messageProcessor.js');
+    
+    for (const message of testMessages) {
+      const result = await handleWhatsAppContactUpload(message, '972544349661');
+      results.push({ message, result });
+    }
+    
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('Token-only test error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Test endpoint for timeout simulation
+app.post('/api/debug/timeout-test', async (req, res) => {
+  try {
+    const { userEmail } = req.body;
+    console.log('🧪 Testing timeout scenario for user:', userEmail);
+    
+    // Simulate an expired token by manually setting expiry to past time
+    const { pool } = await import('./db/db.js');
+    const client = await pool.connect();
+    
+    try {
+      // Set token expiry to 11 minutes ago (past the 10-minute window)
+      const elevenMinutesAgo = new Date(Date.now() - (11 * 60 * 1000));
+      
+      await client.query(`
+        UPDATE users 
+        SET whatsapp_token_expires_at = $1
+        WHERE email = $2
+      `, [elevenMinutesAgo, userEmail]);
+      
+      // Now test contact upload - should get timeout message
+      const { handleWhatsAppContactUpload } = await import('./Services/dialog360/messageProcessor.js');
+      const result = await handleWhatsAppContactUpload('יוסי כהן, 0501234567', '972544349661');
+      
+      res.json({ 
+        success: true, 
+        message: 'Timeout test completed',
+        result: result
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Timeout test error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// WhatsApp token management endpoints
+app.get('/api/whatsapp/token-status/:userEmail', async (req, res) => {
+  try {
+    const { userEmail } = req.params;
+    const { getActiveTokenForUser } = await import('./Services/dialog360/messageProcessor.js');
+    const tokenData = await getActiveTokenForUser(userEmail);
+    
+    res.json({ success: true, token: tokenData });
+  } catch (error) {
+    console.error('Token status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/whatsapp/generate-token', async (req, res) => {
+  try {
+    const { userEmail, userName } = req.body;
+    const { generateAndStoreToken } = await import('./Services/dialog360/messageProcessor.js');
+    const token = await generateAndStoreToken(userEmail, userName);
+    
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('Token generation error:', error);
+    res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Tag management endpoints
 app.post('/api/contacts/update-tags', updateContactTags);
 app.post('/api/contacts/update-tag-name', updateTagName);
