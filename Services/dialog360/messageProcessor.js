@@ -187,6 +187,15 @@ export async function processDialog360Message(message, value) {
     const timestamp = message.timestamp;
     const messageType = message.type;
 
+    // Debug logging for WhatsApp contact upload
+    console.log('🔍 Dialog360 Message Received:', {
+      messageId,
+      from,
+      messageType,
+      textContent: message.text?.body,
+      timestamp: new Date(timestamp * 1000).toISOString()
+    });
+
     // Mark message as read (shows colored ticks to sender)
     await markMessageAsRead(messageId, from);
 
@@ -607,6 +616,12 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
  */
 async function handleWhatsAppContactUpload(messageText, senderNumber) {
   try {
+    console.log('🔍 Checking WhatsApp contact upload:', {
+      messageText,
+      senderNumber,
+      hasToken: /VIX_[A-Z0-9_]+/.test(messageText)
+    });
+
     // Check if message contains a token
     const tokenMatch = messageText.match(/VIX_[A-Z0-9_]+/);
     
@@ -719,4 +734,7 @@ async function sendWhatsAppReply(phoneNumber, message) {
     console.error('Error sending WhatsApp reply:', error);
   }
 }
+
+// Export for debugging
+export { handleWhatsAppContactUpload };
 

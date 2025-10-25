@@ -198,6 +198,23 @@ app.get('/api/guest-uploads/:uploadId/contacts', getGuestUploadContacts);
 app.get('/api/followup-notifications', getFollowupNotifications);
 app.delete('/api/followup-notifications/:notificationId', dismissFollowupNotification);
 
+// Debug endpoint for testing WhatsApp contact upload
+app.post('/api/debug/whatsapp-test', async (req, res) => {
+  try {
+    const { message, senderNumber } = req.body;
+    console.log('🧪 Debug WhatsApp Test:', { message, senderNumber });
+    
+    // Import the function directly
+    const { handleWhatsAppContactUpload } = await import('./Services/dialog360/messageProcessor.js');
+    const result = await handleWhatsAppContactUpload(message, senderNumber);
+    
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('Debug test error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Tag management endpoints
 app.post('/api/contacts/update-tags', updateContactTags);
 app.post('/api/contacts/update-tag-name', updateTagName);

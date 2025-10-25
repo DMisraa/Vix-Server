@@ -33,6 +33,15 @@ export async function handleDialog360Webhook(req, res) {
   try {
     const { entry } = req.body;
 
+    // Debug logging
+    console.log('🔍 Dialog360 Webhook Received:', {
+      hasEntry: !!entry,
+      entryLength: entry?.length,
+      entryType: typeof entry,
+      bodyKeys: Object.keys(req.body || {}),
+      timestamp: new Date().toISOString()
+    });
+
     // ✅ CRITICAL: Respond immediately within 5-second hard limit
     // Actual response time: <5ms (well under 250ms median requirement)
     // Always return 200 to prevent Dialog 360 from retrying
