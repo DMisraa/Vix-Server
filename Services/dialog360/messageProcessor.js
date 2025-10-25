@@ -711,14 +711,22 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
  */
 async function sendWhatsAppReply(phoneNumber, message) {
   try {
-    // Use Dialog360 API to send message
-    const response = await fetch('https://waba.360dialog.io/v1/messages', {
+    const apiKey = process.env.D360_API_KEY;
+    
+    if (!apiKey) {
+      console.error('❌ D360_API_KEY not found in environment variables');
+      return;
+    }
+
+    // Use Dialog360 v2 API to send message (same as other functions)
+    const response = await fetch('https://waba-v2.360dialog.io/messages', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.D360_API_KEY}`,
+        'D360-API-KEY': apiKey,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
+        messaging_product: 'whatsapp',
         to: phoneNumber,
         type: 'text',
         text: {
@@ -728,10 +736,14 @@ async function sendWhatsAppReply(phoneNumber, message) {
     });
     
     if (!response.ok) {
-      console.error('Failed to send WhatsApp reply:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error(`❌ WhatsApp reply failed (${response.status}): ${errorText}`);
+    } else {
+      const successData = await response.json();
+      console.log(`✅ WhatsApp reply sent: ${successData.messages?.[0]?.id || 'no-id'}`);
     }
   } catch (error) {
-    console.error('Error sending WhatsApp reply:', error);
+    console.error('❌ WhatsApp reply error:', error.message);
   }
 }
 
