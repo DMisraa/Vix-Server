@@ -54,6 +54,20 @@ function getCelebratorsNames(event) {
 }
 
 /**
+ * Get celebrator obligation word (חייב/חייבים) based on number of celebrators
+ */
+function getCelebratorObligation(event) {
+  // Check if there are multiple celebrators
+  const hasMultipleCelebrators = event.celebrator1_name && event.celebrator2_name;
+  
+  if (hasMultipleCelebrators) {
+    return 'חייבים'; // plural - "must" for multiple celebrators
+  }
+  
+  return 'חייב'; // singular - "must" for single celebrator
+}
+
+/**
  * Template: event_invitation
  * 
  * Body: חברים אהובים 💖
@@ -82,9 +96,9 @@ function configureFirstEventInvitation(event, contact) {
     event_time: event.event_time
   });
 
-  const eventName = getEventTypeHebrew(event.event_type);              // Variable 1
-  const eventDate = getCelebratorsNames(event);                        // Variable 2
-  const eventLocation = getDayOfWeek(event.event_date);               // Variable 3
+  const eventType = getEventTypeHebrew(event.event_type);              // Variable 1
+  const celebratorsNames = getCelebratorsNames(event);                 // Variable 2
+  const dayOfWeek = getDayOfWeek(event.event_date);                   // Variable 3
   const customParamsRaw = [
     formatEventDate(event.event_date) || '',                          // Variable 4
     event.venue_name || event.location || '',                         // Variable 5
@@ -93,18 +107,18 @@ function configureFirstEventInvitation(event, contact) {
   const customParamsFiltered = customParamsRaw.filter(Boolean);
 
   console.log('🔍 CONFIGURED VALUES:', {
-    eventName,
-    eventDate,
-    eventLocation,
+    eventType,
+    celebratorsNames,
+    dayOfWeek,
     customParamsRaw,
     customParamsFiltered,
     '⚠️ Parameters removed by filter': customParamsRaw.length - customParamsFiltered.length
   });
 
   return {
-    eventName,
-    eventDate,
-    eventLocation,
+    eventName: eventType,        // Variable 1: Event type
+    eventDate: celebratorsNames, // Variable 2: Celebrators names
+    eventLocation: dayOfWeek,    // Variable 3: Day of week
     customParams: customParamsFiltered
   };
 }
@@ -131,13 +145,13 @@ function configureFirstEventInvitation(event, contact) {
 function configureInvitationFollowup(event, contact) {
   return {
     guestName: contact.display_name || contact.canonical_form || 'אורח',
-    eventName: getEventTypeHebrew(event.event_type),              // Variable 1
-    eventDate: getCelebratorsNames(event),                        // Variable 2
-    eventLocation: getDayOfWeek(event.event_date),                // Variable 3
+    eventName: getEventTypeHebrew(event.event_type),              // Variable 1: Event type
+    eventDate: getCelebratorsNames(event),                        // Variable 2: Celebrators names
+    eventLocation: getDayOfWeek(event.event_date),                // Variable 3: Day of week
     customParams: [
-      formatEventDate(event.event_date) || '',                   // Variable 4
-      event.venue_name || event.location || '',                  // Variable 5
-      event.event_time || ''                                     // Variable 6
+      formatEventDate(event.event_date) || '',                   // Variable 4: Date
+      event.venue_name || event.location || '',                  // Variable 5: Location
+      event.event_time || ''                                     // Variable 6: Time
     ].filter(Boolean)
   };
 }
@@ -163,13 +177,13 @@ function configureInvitationFollowup(event, contact) {
 function configureReminder1(event, contact) {
   return {
     guestName: contact.display_name || contact.canonical_form || 'אורח',
-    eventName: getEventTypeHebrew(event.event_type),              // Variable 1
-    eventDate: getCelebratorsNames(event),                        // Variable 2
-    eventLocation: getDayOfWeek(event.event_date),                // Variable 3
+    eventName: getEventTypeHebrew(event.event_type),              // Variable 1: Event type
+    eventDate: getCelebratorsNames(event),                        // Variable 2: Celebrators names
+    eventLocation: getDayOfWeek(event.event_date),                // Variable 3: Day of week
     customParams: [
-      formatEventDate(event.event_date) || '',                   // Variable 4
-      event.venue_name || event.location || '',                  // Variable 5
-      event.event_time || ''                                     // Variable 6
+      formatEventDate(event.event_date) || '',                   // Variable 4: Date
+      event.venue_name || event.location || '',                  // Variable 5: Location
+      event.event_time || ''                                     // Variable 6: Time
     ].filter(Boolean)
   };
 }
@@ -195,13 +209,13 @@ function configureReminder1(event, contact) {
 function configureReminder2(event, contact) {
   return {
     guestName: contact.display_name || contact.canonical_form || 'אורח',
-    eventName: getEventTypeHebrew(event.event_type),              // Variable 1
-    eventDate: getCelebratorsNames(event),                        // Variable 2
-    eventLocation: getDayOfWeek(event.event_date),                // Variable 3
+    eventName: getEventTypeHebrew(event.event_type),              // Variable 1: Event type
+    eventDate: getCelebratorsNames(event),                        // Variable 2: Celebrators names
+    eventLocation: getDayOfWeek(event.event_date),                // Variable 3: Day of week
     customParams: [
-      formatEventDate(event.event_date) || '',                   // Variable 4
-      event.venue_name || event.location || '',                  // Variable 5
-      event.event_time || ''                                     // Variable 6
+      formatEventDate(event.event_date) || '',                   // Variable 4: Date
+      event.venue_name || event.location || '',                  // Variable 5: Location
+      event.event_time || ''                                     // Variable 6: Time
     ].filter(Boolean)
   };
 }
@@ -211,28 +225,30 @@ function configureReminder2(event, contact) {
  * 
  * Body: הלו! 📣
  * זה אנחנו שוב 😆
- * {{variable_1}} פשוט רוצים לדעת אם אתם באים ל{{variable_2}} ביום {{variable_3}}, בתאריך {{variable_4}}, ב-{{variable_5}}.
- * האירוע מתחיל בשעה {{variable_6}}.
+ * {{variable_1}} {{variable_2}} רוצים לדעת אם אתם באים ל{{variable_3}} ביום {{variable_4}}, בתאריך {{variable_5}}, ב-{{variable_6}}.
+ * האירוע מתחיל בשעה {{variable_7}}.
  * תענו לנו כבר יא אלופים – שנדע אם לשמור לכם מקום! 😜
  * 
  * Variables:
  * 1. Celebrators names
- * 2. Event type (חתונה, בר מצווה, etc.)
- * 3. Day of week
- * 4. Date (DD.MM.YYYY)
- * 5. Location/Venue
- * 6. Time
+ * 2. Obligation word (חייב/חייבים) - based on number of celebrators
+ * 3. Event type (חתונה, בר מצווה, etc.)
+ * 4. Day of week
+ * 5. Date (DD.MM.YYYY)
+ * 6. Location/Venue
+ * 7. Time
  */
 function configureReminder3(event, contact) {
   return {
     guestName: contact.display_name || contact.canonical_form || 'אורח',
-    eventName: getCelebratorsNames(event),                        // Variable 1 (Celebrators)
-    eventDate: getEventTypeHebrew(event.event_type),              // Variable 2 (Event type)
-    eventLocation: getDayOfWeek(event.event_date),                // Variable 3 (Day of week)
+    eventName: getCelebratorsNames(event),                        // Variable 1: Celebrators names
+    eventDate: getCelebratorObligation(event),                    // Variable 2: Obligation word (חייב/חייבים)
+    eventLocation: getEventTypeHebrew(event.event_type),          // Variable 3: Event type
     customParams: [
-      formatEventDate(event.event_date) || '',                   // Variable 4 (Date)
-      event.venue_name || event.location || '',                  // Variable 5 (Location)
-      event.event_time || ''                                     // Variable 6 (Time)
+      getDayOfWeek(event.event_date) || '',                      // Variable 4: Day of week
+      formatEventDate(event.event_date) || '',                   // Variable 5: Date
+      event.venue_name || event.location || '',                  // Variable 6: Location
+      event.event_time || ''                                     // Variable 7: Time
     ].filter(Boolean)
   };
 }
@@ -328,4 +344,3 @@ export function getAvailableTemplates() {
     { name: 'event_directions', description: 'הוראות הגעה', hasImage: true },
   ];
 }
-

@@ -14,6 +14,156 @@ import { sendGuestCountQuestion, markMessageAsRead, sendDeclineConfirmation, sen
 import { handleGuestCountReply } from './guestCountHandler.js';
 import { calculateFollowupDate, getFollowupDisplayText } from './followUpButtonsHelper.js';
 
+// WhatsApp contact upload functions (moved from whatsappListener.js)
+const TOKEN_PREFIX = 'VIX_';
+const TOKEN_EXPIRY_DAYS = 30; // 30 days expiry
+
+/**
+ * Parse token and extract user information
+ * Token format: VIX_[userHash]_[timestamp]_[randomStr]
+ */
+function parseToken(token) {
+    try {
+        if (!token.startsWith(TOKEN_PREFIX)) {
+            return null;
+        }
+
+        const parts = token.split('_');
+        if (parts.length !== 4) {
+            return null;
+        }
+
+        const [, userHash, timestampBase36, randomStr] = parts;
+        
+        // Convert base36 timestamp back to milliseconds
+        const timestamp = parseInt(timestampBase36, 36);
+        const tokenAge = Date.now() - timestamp;
+        const maxAge = TOKEN_EXPIRY_DAYS * 15 * 24 * 60 * 60 * 1000; // 15 days in milliseconds
+
+        if (tokenAge > maxAge) {
+            console.log(`Token expired: ${tokenAge}ms old (max: ${maxAge}ms)`);
+            return null;
+        }
+
+        return {
+            userHash,
+            timestamp,
+            randomStr,
+            tokenAge,
+            isValid: true
+        };
+    } catch (error) {
+        console.error('Error parsing token:', error);
+        return null;
+    }
+}
+
+/**
+ * Find user by user hash
+ */
+async function findUserByHash(userHash) {
+    try {
+        const query = `
+            SELECT id, email, name 
+            FROM users 
+            WHERE encode(email::bytea, 'base64') LIKE $1
+        `;
+        const result = await pool.query(query, [`%${userHash}%`]);
+        return result.rows[0] || null;
+    } catch (error) {
+        console.error('Error finding user by hash:', error);
+        return null;
+    }
+}
+
+/**
+ * Process contact data from WhatsApp message
+ */
+function parseContactData(messageText) {
+    const contacts = [];
+    const lines = messageText.split('\n').filter(line => line.trim());
+    
+    for (const line of lines) {
+        // Skip if it's the token line
+        if (line.includes('VIX_')) continue;
+        
+        // Try to parse contact information
+        // Expected format: Name, Phone, Email (optional)
+        const parts = line.split(',').map(part => part.trim());
+        
+        if (parts.length >= 2) {
+            const contact = {
+                name: parts[0],
+                phone: parts[1].replace(/[^\d+]/g, ''), // Keep only digits and +
+                email: parts[2] || null
+            };
+            
+            // Validate phone number
+            if (contact.phone && contact.phone.length >= 8) {
+                contacts.push(contact);
+            }
+        }
+    }
+    
+    return contacts;
+}
+
+/**
+ * Save contacts to database using guest upload system
+ */
+async function saveContactsToDatabase(userId, contacts, userEmail) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Insert into guest_contact_uploads table
+        const uploadQuery = `
+            INSERT INTO guest_contact_uploads 
+            (invited_by_email, guest_name, guest_notes, token) 
+            VALUES ($1, $2, $3, $4) 
+            RETURNING upload_id
+        `;
+        const uploadResult = await client.query(uploadQuery, [
+            userEmail,
+            'WhatsApp Contact Upload', // guest_name
+            'Contacts sent via WhatsApp', // guest_notes
+            'whatsapp_upload' // token identifier
+        ]);
+        
+        const uploadId = uploadResult.rows[0].upload_id;
+        
+        // Insert contacts into guest_contacts table
+        const contactQuery = `
+            INSERT INTO guest_contacts 
+            (upload_id, display_name, phone_number, email, invited_by, contact_source, canonical_form) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `;
+        
+        for (const contact of contacts) {
+            await client.query(contactQuery, [
+                uploadId,
+                contact.name || '',
+                contact.phone || '',
+                contact.email || '',
+                userEmail,
+                'whatsapp_upload', // contact_source
+                contact.name || '' // canonical_form
+            ]);
+        }
+        
+        await client.query('COMMIT');
+        console.log(`Saved ${contacts.length} WhatsApp contacts for user ${userId} (upload_id: ${uploadId})`);
+        
+        return { success: true, uploadId: uploadId };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error saving WhatsApp contacts:', error);
+        return { success: false, error: error.message };
+    } finally {
+        client.release();
+    }
+}
+
 /**
  * Message Processor
  * 
@@ -44,7 +194,14 @@ export async function processDialog360Message(message, value) {
       case 'text':
         const textContent = message.text?.body;
         
-        // Update database with text response
+        // Check if this is a WhatsApp contact upload message
+        const contactUploadResult = await handleWhatsAppContactUpload(textContent, from);
+        if (contactUploadResult.handled) {
+          // Contact upload was processed, don't process as event response
+          return;
+        }
+        
+        // Update database with text response (normal event invitation flow)
         await updateEventMessageResponse(from, textContent, timestamp, null, 'text');
         break;
 
@@ -438,6 +595,128 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
     await client.query('ROLLBACK');
   } finally {
     client.release();
+  }
+}
+
+/**
+ * Handle WhatsApp contact upload messages
+ * 
+ * @param {string} messageText - The message content
+ * @param {string} senderNumber - The sender's phone number
+ * @returns {Object} - { handled: boolean, result?: Object }
+ */
+async function handleWhatsAppContactUpload(messageText, senderNumber) {
+  try {
+    // Check if message contains a token
+    const tokenMatch = messageText.match(/VIX_[A-Z0-9_]+/);
+    
+    if (tokenMatch) {
+      // Phase 1: Token validation
+      const token = tokenMatch[0];
+      console.log('WhatsApp Contact Upload - Token found:', token);
+      
+      const tokenData = parseToken(token);
+      if (!tokenData || !tokenData.isValid) {
+        await sendWhatsAppReply(senderNumber, '❌ הטוקן לא תקין או פג תוקף. אנא נסה שוב.');
+        return { handled: true, result: { success: false, message: 'Invalid token' } };
+      }
+      
+      const user = await findUserByHash(tokenData.userHash);
+      if (!user) {
+        await sendWhatsAppReply(senderNumber, '❌ משתמש לא נמצא. אנא בדוק את הטוקן.');
+        return { handled: true, result: { success: false, message: 'User not found' } };
+      }
+      
+      // Store token for this user (using a simple in-memory store for now)
+      global.activeTokens = global.activeTokens || new Map();
+      global.activeTokens.set(token, {
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)) // 30 days
+      });
+      
+      await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את אנשי הקשר שלכם בפורמט:\nשם, טלפון, אימייל (אופציונלי)`);
+      return { handled: true, result: { success: true, message: 'Token validated' } };
+      
+    } else {
+      // Phase 2: Check for contact data (if user has active token)
+      global.activeTokens = global.activeTokens || new Map();
+      let activeUser = null;
+      let activeToken = null;
+      
+      for (const [token, tokenInfo] of global.activeTokens.entries()) {
+        if (tokenInfo.userId) {
+          activeUser = tokenInfo;
+          activeToken = token;
+          break;
+        }
+      }
+      
+      if (!activeUser) {
+        // Not a contact upload message, let it be processed as normal event response
+        return { handled: false };
+      }
+      
+      // Parse contact data from message
+      const contacts = parseContactData(messageText);
+      
+      if (contacts.length === 0) {
+        await sendWhatsAppReply(senderNumber, '❌ לא נמצאו אנשי קשר תקינים בהודעה. אנא שלחו בפורמט: שם, טלפון, אימייל');
+        return { handled: true, result: { success: false, message: 'No valid contacts' } };
+      }
+      
+      // Save contacts to database (using guest upload system)
+      const result = await saveContactsToDatabase(activeUser.userId, contacts, activeUser.userEmail);
+      
+      if (result.success) {
+        // Remove the token after successful contact save
+        global.activeTokens.delete(activeToken);
+        await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות שלכם לבדיקה ואישור.`);
+        return { handled: true, result: { success: true, contacts: contacts, uploadId: result.uploadId } };
+      } else {
+        await sendWhatsAppReply(senderNumber, '❌ שגיאה בשמירת אנשי הקשר. אנא נסה שוב.');
+        return { handled: true, result: { success: false, message: 'Failed to save contacts' } };
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error handling WhatsApp contact upload:', error);
+    await sendWhatsAppReply(senderNumber, '❌ שגיאה בעיבוד ההודעה. אנא נסה שוב.');
+    return { handled: true, result: { success: false, message: 'Error processing message' } };
+  }
+}
+
+/**
+ * Send WhatsApp reply message
+ * 
+ * @param {string} phoneNumber - Recipient phone number
+ * @param {string} message - Message to send
+ */
+async function sendWhatsAppReply(phoneNumber, message) {
+  try {
+    // Use Dialog360 API to send message
+    const response = await fetch('https://waba.360dialog.io/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.D360_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        to: phoneNumber,
+        type: 'text',
+        text: {
+          body: message
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to send WhatsApp reply:', response.status, response.statusText);
+    }
+  } catch (error) {
+    console.error('Error sending WhatsApp reply:', error);
   }
 }
 
