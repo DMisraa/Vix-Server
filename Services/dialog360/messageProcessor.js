@@ -21,6 +21,8 @@ const CONTACT_UPLOAD_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 // In-memory storage for buffered contacts (in production, use Redis or similar)
 const contactBuffers = new Map(); // phoneNumber -> { user, contacts[], timeoutId }
+const activeTokens = new Map(); // token -> { user, validatedAt }
+const phoneToToken = new Map(); // phoneNumber -> token (for tracking which token a phone number is using)
 
 /**
  * Parse token and extract user information
@@ -134,6 +136,7 @@ function parseContactData(messageText) {
  * Save contacts to database using guest upload system
  */
 async function saveContactsToDatabase(userId, contacts, userEmail) {
+    console.log('💾 saveContactsToDatabase called with:', { userId, userEmail, contactsCount: contacts.length });
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -145,6 +148,7 @@ async function saveContactsToDatabase(userId, contacts, userEmail) {
             VALUES ($1, $2, $3, $4) 
             RETURNING upload_id
         `;
+        console.log('📝 Inserting upload with invited_by_email:', userEmail);
         const uploadResult = await client.query(uploadQuery, [
             userEmail,
             'WhatsApp Contact Upload', // guest_name
@@ -162,6 +166,7 @@ async function saveContactsToDatabase(userId, contacts, userEmail) {
         `;
         
         for (const contact of contacts) {
+            console.log('📝 Inserting contact with invited_by:', userEmail, 'for contact:', contact.name);
             await client.query(contactQuery, [
                 uploadId,
                 contact.name || '',
@@ -621,16 +626,24 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
   try {
     console.log('📇 Processing contact cards from:', senderNumber);
     
-    // Check if there's an active token validated by this phone number
-    const recentTokenData = await getRecentlyValidatedToken();
+    // Check if there's an active token for this phone number
+    const token = phoneToToken.get(senderNumber);
     
-    if (!recentTokenData) {
-      // No active token, let it be processed as normal event response
-      console.log('⚠️ No active token found for contact cards');
+    if (!token) {
+      // No active token for this phone number, let it be processed as normal event response
+      console.log('⚠️ No active token found for contact cards from:', senderNumber);
       return { handled: false };
     }
     
-    const { user: activeUser } = recentTokenData;
+    // Get the user from the specific token
+    const activeUser = getUserFromValidatedToken(token);
+    
+    if (!activeUser) {
+      // Token expired or invalid, clean up
+      phoneToToken.delete(senderNumber);
+      console.log('⚠️ Token expired or invalid for phone:', senderNumber);
+      return { handled: false };
+    }
     
     // Parse vCard contacts
     const parsedContacts = [];
@@ -719,6 +732,7 @@ async function finalizeContactUpload(senderNumber) {
     console.log(`💾 Finalizing contact upload for ${senderNumber}: ${contacts.length} contacts`);
     
     // Save contacts to database (using guest upload system)
+    console.log('🔍 About to save contacts with user email:', user.email, 'for user ID:', user.id);
     const result = await saveContactsToDatabase(user.id, contacts, user.email);
     
     if (result.success) {
@@ -729,12 +743,14 @@ async function finalizeContactUpload(senderNumber) {
       console.error('❌ Failed to save contacts:', result.error);
     }
     
-    // Clear the buffer
+    // Clear the buffer and phone-to-token mapping
     contactBuffers.delete(senderNumber);
+    phoneToToken.delete(senderNumber);
     
   } catch (error) {
     console.error('❌ Error finalizing contact upload:', error);
     contactBuffers.delete(senderNumber);
+    phoneToToken.delete(senderNumber);
   }
 }
 
@@ -772,6 +788,17 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       // Store token in database for persistence
       await storeTokenInDatabase(token, user.id, user.email, user.name);
       
+      // Store the validated token in memory for contact processing
+      activeTokens.set(token, {
+        user: user,
+        validatedAt: Date.now()
+      });
+      
+      // Track which phone number is using this token
+      phoneToToken.set(senderNumber, token);
+      
+      console.log('✅ Token validated and stored:', token, 'for user:', user.email, 'from phone:', senderNumber);
+      
       await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את כרטיסי אנשי הקשר שלכם - פשוט לחצו על כפתור השיתוף של אנשי הקשר בתפריט ולחצו על כל אנשי הקשר שתרצו לשלוח.\n\n⏰ הטוקן פעיל למשך 10 דקות בלבד`);
       return { handled: true, result: { success: true, message: 'Token validated' } };
       
@@ -798,12 +825,18 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       
       // Phase 2: Manual contact upload not supported
       // Only contact cards are accepted. If user sends text, inform them to send contact cards.
-      const recentTokenData = await getRecentlyValidatedToken();
+      const token = phoneToToken.get(senderNumber);
       
-      if (recentTokenData) {
-        // User has an active token but sent text instead of contact cards
-        await sendWhatsAppReply(senderNumber, '📇 אנא שלחו כרטיסי קשר בלבד.\n\nלחצו על כפתור השיתוף של אנשי הקשר וצרו קשר עם הכרטיסים שתרצו לשלוח.');
-        return { handled: true, result: { success: false, message: 'Text contacts not accepted' } };
+      if (token) {
+        const user = getUserFromValidatedToken(token);
+        if (user) {
+          // User has an active token but sent text instead of contact cards
+          await sendWhatsAppReply(senderNumber, '📇 אנא שלחו כרטיסי קשר בלבד.\n\nלחצו על כפתור השיתוף של אנשי הקשר וצרו קשר עם הכרטיסים שתרצו לשלוח.');
+          return { handled: true, result: { success: false, message: 'Text contacts not accepted' } };
+        } else {
+          // Token expired, clean up
+          phoneToToken.delete(senderNumber);
+        }
       }
       
       // No active token, let it be processed as normal event response
@@ -909,48 +942,28 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
 }
 
 /**
- * Get recently validated token (within last 10 minutes)
- * This allows third parties to send contacts after token validation
+ * Get user from a specific validated token
+ * This is the correct way to verify which user a token belongs to
  */
-async function getRecentlyValidatedToken() {
-  try {
-    const client = await pool.connect();
-    try {
-      // Find user with recently validated token (within last 10 minutes)
-      const tenMinutesAgo = new Date(Date.now() - (10 * 60 * 1000));
-      
-      const result = await client.query(`
-        SELECT id, email, name, whatsapp_token, whatsapp_token_expires_at
-        FROM users
-        WHERE whatsapp_token IS NOT NULL
-        AND whatsapp_token_expires_at > NOW()
-        AND whatsapp_token IS NOT NULL
-        ORDER BY whatsapp_token_expires_at DESC
-        LIMIT 1
-      `);
-      
-      if (result.rows.length > 0) {
-        const row = result.rows[0];
-        return {
-          token: row.whatsapp_token,
-          user: {
-            id: row.id,
-            email: row.email,
-            name: row.name
-          }
-        };
-      }
-      
-      return null;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Error getting recently validated token:', error);
+function getUserFromValidatedToken(token) {
+  const tokenData = activeTokens.get(token);
+  
+  if (!tokenData) {
+    console.log('⚠️ Token not found in active tokens:', token);
     return null;
   }
+  
+  // Check if token is still valid (within 10 minutes)
+  const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+  if (tokenData.validatedAt < tenMinutesAgo) {
+    console.log('⚠️ Token expired:', token);
+    activeTokens.delete(token);
+    return null;
+  }
+  
+  console.log('✅ Found valid token for user:', tokenData.user.email);
+  return tokenData.user;
 }
-
 
 /**
  * Generate and store a new token for a user
