@@ -642,7 +642,8 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
       // Token expired or invalid, clean up
       phoneToToken.delete(senderNumber);
       console.log('⚠️ Token expired or invalid for phone:', senderNumber);
-      return { handled: false };
+      await sendWhatsAppReply(senderNumber, '❌ הטוקן פג תוקף. אנא שלחו את הטוקן שוב כדי לשלוח אנשי קשר.');
+      return { handled: true, result: { success: false, message: 'Token expired' } };
     }
     
     // Parse vCard contacts
@@ -680,7 +681,7 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
         finalizeContactUpload(senderNumber);
       }, CONTACT_UPLOAD_TIMEOUT);
       
-      await sendWhatsAppReply(senderNumber, `✅ קיבלנו ${parsedContacts.length} אנשי קשר!\n\nנוספה${parsedContacts.length > 1 ? 'ו' : ''} את${parsedContacts.length > 1 ? '' : 'ם'} לרשימה.\n\nסה"כ נשלחו: ${existingBuffer.contacts.length} אנשי קשר\n\nאפשר להמשיך לשלוח עוד או להשיב "סיימתי" אם סיימתם.`);
+      await sendWhatsAppReply(senderNumber, `✅ קיבלנו ${parsedContacts.length} אנשי קשר!\n\n${parsedContacts.length > 1 ? 'נוספו לרשימה' : 'נוסף לרשימה'}.\n\nסה"כ נשלחו: ${existingBuffer.contacts.length} אנשי קשר\n\nאפשר להמשיך לשלוח עוד או להשיב "סיימתי" אם סיימתם.`);
       return { handled: true, result: { success: true, contacts: parsedContacts } };
     } else {
       // Create new buffer
@@ -696,7 +697,7 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
       
       console.log(`📊 Started new buffer with ${parsedContacts.length} contacts`);
       
-      await sendWhatsAppReply(senderNumber, `✅ מעולה! קיבלנו ${parsedContacts.length} אנשי קשר!\n\nאפשר להמשיך לשלוח עוד אנשי קשר או להשיב "סיימתי" אם סיימתם.\n\n⏰ המשך הפעיל למשך 10 דקות בלבד.`);
+      await sendWhatsAppReply(senderNumber, `✅ מעולה! קיבלנו ${parsedContacts.length} אנשי קשר!\n\nאפשר להמשיך לשלוח עוד אנשי קשר או להשיב "סיימתי" אם סיימתם.`);
       return { handled: true, result: { success: true, contacts: parsedContacts } };
     }
     
@@ -736,7 +737,7 @@ async function finalizeContactUpload(senderNumber) {
     const result = await saveContactsToDatabase(user.id, contacts, user.email);
     
     if (result.success) {
-      await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות שלכם לבדיקה ואישור.`);
+      await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות של בעל הטוקן לבדיקה ואישור.`);
       console.log(`✅ Saved ${contacts.length} contacts for user ${user.email}`);
     } else {
       await sendWhatsAppReply(senderNumber, '❌ שגיאה בשמירת אנשי הקשר. אנא נסה שוב.');
@@ -834,8 +835,9 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
           await sendWhatsAppReply(senderNumber, '📇 אנא שלחו כרטיסי קשר בלבד.\n\nלחצו על כפתור השיתוף של אנשי הקשר וצרו קשר עם הכרטיסים שתרצו לשלוח.');
           return { handled: true, result: { success: false, message: 'Text contacts not accepted' } };
         } else {
-          // Token expired, clean up
+          // Token expired, clean up and notify user
           phoneToToken.delete(senderNumber);
+          await sendWhatsAppReply(senderNumber, '❌ הטוקן פג תוקף. אנא שלחו את הטוקן שוב כדי לשלוח אנשי קשר.');
         }
       }
       
