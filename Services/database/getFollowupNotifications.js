@@ -39,7 +39,7 @@ export async function getFollowupNotifications(req, res) {
           AND em.response = 'לא בטוח'
           AND em.followup_date IS NOT NULL
           AND em.followup_notification_dismissed = FALSE
-        ORDER BY em.followup_date ASC
+        ORDER BY em.created_at DESC
       `, [ownerEmail]);
 
       res.json({ 

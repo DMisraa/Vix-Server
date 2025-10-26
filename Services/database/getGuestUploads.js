@@ -19,11 +19,12 @@ export async function getGuestUploads(req, res) {
           gu.guest_notes,
           gu.created_at,
           gu.token,
+          gu.sender_phone,
           COUNT(gc.id) as contact_count
         FROM guest_contact_uploads gu
         LEFT JOIN guest_contacts gc ON gu.upload_id = gc.upload_id
         WHERE gu.invited_by_email = $1
-        GROUP BY gu.upload_id, gu.guest_name, gu.guest_notes, gu.created_at, gu.token
+        GROUP BY gu.upload_id, gu.guest_name, gu.guest_notes, gu.created_at, gu.token, gu.sender_phone
         ORDER BY gu.created_at DESC
       `, [invitedByEmail]);
 

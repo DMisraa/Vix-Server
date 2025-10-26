@@ -144,7 +144,7 @@ function parseContactData(messageText) {
 /**
  * Save contacts to database using guest upload system
  */
-async function saveContactsToDatabase(userId, contacts, userEmail) {
+async function saveContactsToDatabase(userId, contacts, userEmail, senderPhone = null) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -152,15 +152,16 @@ async function saveContactsToDatabase(userId, contacts, userEmail) {
         // Insert into guest_contact_uploads table
         const uploadQuery = `
             INSERT INTO guest_contact_uploads 
-            (invited_by_email, guest_name, guest_notes, token) 
-            VALUES ($1, $2, $3, $4) 
+            (invited_by_email, guest_name, guest_notes, token, sender_phone) 
+            VALUES ($1, $2, $3, $4, $5) 
             RETURNING upload_id
         `;
         const uploadResult = await client.query(uploadQuery, [
             userEmail,
-            'WhatsApp Contact Upload', // guest_name
-            'Contacts sent via WhatsApp', // guest_notes
-            'whatsapp_upload' // token identifier
+            `משתמש WhatsApp (${senderPhone})`, // guest_name in Hebrew with phone
+            'אנשי קשר נשלחו דרך WhatsApp', // guest_notes in Hebrew
+            'whatsapp_upload', // token identifier
+            senderPhone // sender phone number
         ]);
         
         const uploadId = uploadResult.rows[0].upload_id;
@@ -727,7 +728,7 @@ async function finalizeContactUpload(senderNumber) {
     
     // Save contacts to database (using guest upload system)
     console.log('🔍 EMAIL EXTRACTED FROM TOKEN FOR invited_by COLUMN:', user.email);
-    const result = await saveContactsToDatabase(user.id, contacts, user.email);
+    const result = await saveContactsToDatabase(user.id, contacts, user.email, senderNumber);
     
     if (result.success) {
       await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות של בעל הטוקן לבדיקה ואישור.`);
