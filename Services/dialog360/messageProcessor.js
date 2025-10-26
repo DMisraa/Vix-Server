@@ -17,6 +17,10 @@ import { calculateFollowupDate, getFollowupDisplayText } from './followUpButtons
 // WhatsApp contact upload functions
 const TOKEN_PREFIX = 'VIX_';
 const TOKEN_EXPIRY_DAYS = 10; // 10 days expiry
+const CONTACT_UPLOAD_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+// In-memory storage for buffered contacts (in production, use Redis or similar)
+const contactBuffers = new Map(); // phoneNumber -> { user, contacts[], timeoutId }
 
 /**
  * Parse token and extract user information
@@ -225,6 +229,19 @@ export async function processDialog360Message(message, value) {
         break;
 
       case 'video':
+        break;
+
+      case 'contacts':
+        // Handle contact cards (vCard format)
+        const contacts = message.contacts || [];
+        console.log(`📇 Received ${contacts.length} contact card(s) from ${from}`);
+        
+        // Check if this is a WhatsApp contact upload
+        const contactCardResult = await handleWhatsAppContactCards(contacts, from);
+        if (contactCardResult.handled) {
+          // Contact upload was processed, don't process as event response
+          return;
+        }
         break;
 
       case 'button':
@@ -594,6 +611,134 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
 }
 
 /**
+ * Handle WhatsApp contact cards (vCard format)
+ * 
+ * @param {Array} contacts - Array of contact objects from WhatsApp
+ * @param {string} senderNumber - The sender's phone number
+ * @returns {Object} - { handled: boolean, result?: Object }
+ */
+async function handleWhatsAppContactCards(contacts, senderNumber) {
+  try {
+    console.log('📇 Processing contact cards from:', senderNumber);
+    
+    // Check if there's an active token validated by this phone number
+    const recentTokenData = await getRecentlyValidatedToken();
+    
+    if (!recentTokenData) {
+      // No active token, let it be processed as normal event response
+      console.log('⚠️ No active token found for contact cards');
+      return { handled: false };
+    }
+    
+    const { user: activeUser } = recentTokenData;
+    
+    // Parse vCard contacts
+    const parsedContacts = [];
+    for (const contact of contacts) {
+      const contactData = {
+        name: contact.name?.formatted_name || contact.name?.first_name || contact.name?.display_name || 'Unknown',
+        phone: contact.phones?.[0]?.phone || null,
+        email: contact.emails?.[0]?.email || null
+      };
+      
+      // Validate that we have at least a name or phone
+      if (contactData.name || contactData.phone) {
+        parsedContacts.push(contactData);
+        console.log(`  📇 Parsed contact: ${contactData.name} - ${contactData.phone}`);
+      }
+    }
+    
+    if (parsedContacts.length === 0) {
+      await sendWhatsAppReply(senderNumber, '❌ לא נמצאו אנשי קשר תקינים בכרטיסי הקשר ששלחתם.');
+      return { handled: true, result: { success: false, message: 'No valid contacts' } };
+    }
+    
+    // Check if we already have a buffer for this sender
+    const existingBuffer = contactBuffers.get(senderNumber);
+    
+    if (existingBuffer) {
+      // Add to existing buffer
+      existingBuffer.contacts.push(...parsedContacts);
+      console.log(`📊 Buffering ${parsedContacts.length} contacts. Total in buffer: ${existingBuffer.contacts.length}`);
+      
+      // Reset the timeout
+      clearTimeout(existingBuffer.timeoutId);
+      existingBuffer.timeoutId = setTimeout(() => {
+        finalizeContactUpload(senderNumber);
+      }, CONTACT_UPLOAD_TIMEOUT);
+      
+      await sendWhatsAppReply(senderNumber, `✅ קיבלנו ${parsedContacts.length} אנשי קשר!\n\nנוספה${parsedContacts.length > 1 ? 'ו' : ''} את${parsedContacts.length > 1 ? '' : 'ם'} לרשימה.\n\nסה"כ נשלחו: ${existingBuffer.contacts.length} אנשי קשר\n\nאפשר להמשיך לשלוח עוד או להשיב "סיימתי" אם סיימתם.`);
+      return { handled: true, result: { success: true, contacts: parsedContacts } };
+    } else {
+      // Create new buffer
+      const timeoutId = setTimeout(() => {
+        finalizeContactUpload(senderNumber);
+      }, CONTACT_UPLOAD_TIMEOUT);
+      
+      contactBuffers.set(senderNumber, {
+        user: activeUser,
+        contacts: parsedContacts,
+        timeoutId: timeoutId
+      });
+      
+      console.log(`📊 Started new buffer with ${parsedContacts.length} contacts`);
+      
+      await sendWhatsAppReply(senderNumber, `✅ מעולה! קיבלנו ${parsedContacts.length} אנשי קשר!\n\nאפשר להמשיך לשלוח עוד אנשי קשר או להשיב "סיימתי" אם סיימתם.\n\n⏰ המשך הפעיל למשך 10 דקות בלבד.`);
+      return { handled: true, result: { success: true, contacts: parsedContacts } };
+    }
+    
+  } catch (error) {
+    console.error('❌ Error handling WhatsApp contact cards:', error);
+    await sendWhatsAppReply(senderNumber, '❌ שגיאה בעיבוד ההודעה. אנא נסה שוב.');
+    return { handled: true, result: { success: false, message: 'Error processing message' } };
+  }
+}
+
+/**
+ * Finalize contact upload - save all buffered contacts to database
+ * 
+ * @param {string} senderNumber - The sender's phone number
+ */
+async function finalizeContactUpload(senderNumber) {
+  try {
+    const buffer = contactBuffers.get(senderNumber);
+    
+    if (!buffer) {
+      console.log('⚠️ No buffer found for:', senderNumber);
+      return;
+    }
+    
+    const { user, contacts } = buffer;
+    
+    if (contacts.length === 0) {
+      console.log('⚠️ No contacts to save for:', senderNumber);
+      contactBuffers.delete(senderNumber);
+      return;
+    }
+    
+    console.log(`💾 Finalizing contact upload for ${senderNumber}: ${contacts.length} contacts`);
+    
+    // Save contacts to database (using guest upload system)
+    const result = await saveContactsToDatabase(user.id, contacts, user.email);
+    
+    if (result.success) {
+      await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות שלכם לבדיקה ואישור.`);
+      console.log(`✅ Saved ${contacts.length} contacts for user ${user.email}`);
+    } else {
+      await sendWhatsAppReply(senderNumber, '❌ שגיאה בשמירת אנשי הקשר. אנא נסה שוב.');
+      console.error('❌ Failed to save contacts:', result.error);
+    }
+    
+    // Clear the buffer
+    contactBuffers.delete(senderNumber);
+    
+  } catch (error) {
+    console.error('❌ Error finalizing contact upload:', error);
+    contactBuffers.delete(senderNumber);
+  }
+}
+
+/**
  * Handle WhatsApp contact upload messages
  * 
  * @param {string} messageText - The message content
@@ -627,41 +772,42 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       // Store token in database for persistence
       await storeTokenInDatabase(token, user.id, user.email, user.name);
       
-      await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את אנשי הקשר שלכם בפורמט:\nשם, טלפון, אימייל (אופציונלי)\n\n⏰ הטוקן פעיל למשך 10 דקות בלבד`);
+      await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את כרטיסי אנשי הקשר שלכם - פשוט לחצו על כפתור השיתוף של אנשי הקשר בתפריט ולחצו על כל אנשי הקשר שתרצו לשלוח.\n\n⏰ הטוקן פעיל למשך 10 דקות בלבד`);
       return { handled: true, result: { success: true, message: 'Token validated' } };
       
     } else {
-      // Phase 2: Check if this message contains contact data
-      // Since tokens are shared with third parties, we need to check if any active token
-      // was recently validated (within a reasonable time window)
+      // Check if user is trying to finalize contact upload
+      const trimmedText = messageText.trim().toLowerCase();
+      if (trimmedText === 'סיימתי' || trimmedText === 'סיימתי!' || trimmedText === 'סיימתי?') {
+        console.log('📥 User requested to finalize contact upload');
+        
+        // Check if there's an active buffer for this sender
+        const buffer = contactBuffers.get(senderNumber);
+        
+        if (buffer && buffer.contacts.length > 0) {
+          // Clear the timeout and finalize immediately
+          clearTimeout(buffer.timeoutId);
+          await finalizeContactUpload(senderNumber);
+          return { handled: true, result: { success: true, message: 'Contact upload finalized' } };
+        } else {
+          // No buffer found, nothing to save
+          await sendWhatsAppReply(senderNumber, '❗ לא נמצאו אנשי קשר לשמירה. אנא שלחו כרטיסי קשר לפני הסיום.');
+          return { handled: true, result: { success: false, message: 'No contacts to save' } };
+        }
+      }
+      
+      // Phase 2: Manual contact upload not supported
+      // Only contact cards are accepted. If user sends text, inform them to send contact cards.
       const recentTokenData = await getRecentlyValidatedToken();
       
-      if (!recentTokenData) {
-        // No recently validated token, let it be processed as normal event response
-        return { handled: false };
+      if (recentTokenData) {
+        // User has an active token but sent text instead of contact cards
+        await sendWhatsAppReply(senderNumber, '📇 אנא שלחו כרטיסי קשר בלבד.\n\nלחצו על כפתור השיתוף של אנשי הקשר וצרו קשר עם הכרטיסים שתרצו לשלוח.');
+        return { handled: true, result: { success: false, message: 'Text contacts not accepted' } };
       }
       
-      const { token: activeToken, user: activeUser } = recentTokenData;
-      
-      // Parse contact data from message
-      const contacts = parseContactData(messageText);
-      
-      if (contacts.length === 0) {
-        await sendWhatsAppReply(senderNumber, '❌ לא נמצאו אנשי קשר תקינים בהודעה. אנא שלחו בפורמט: שם, טלפון, אימייל');
-        return { handled: true, result: { success: false, message: 'No valid contacts' } };
-      }
-      
-      // Save contacts to database (using guest upload system)
-      const result = await saveContactsToDatabase(activeUser.id, contacts, activeUser.email);
-      
-      if (result.success) {
-        // Keep token active for future use (only time-based expiration)
-        await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות שלכם לבדיקה ואישור.`);
-        return { handled: true, result: { success: true, contacts: contacts, uploadId: result.uploadId } };
-      } else {
-        await sendWhatsAppReply(senderNumber, '❌ שגיאה בשמירת אנשי הקשר. אנא נסה שוב.');
-        return { handled: true, result: { success: false, message: 'Failed to save contacts' } };
-      }
+      // No active token, let it be processed as normal event response
+      return { handled: false };
     }
     
   } catch (error) {
