@@ -79,7 +79,8 @@ async function findUserByHash(userHash) {
             
             console.log(`  Checking user: ${user.email} -> hash: ${generatedHash}`);
             
-            if (generatedHash === userHash) {
+            // Compare in uppercase because token is converted to uppercase
+            if (generatedHash.toUpperCase() === userHash.toUpperCase()) {
                 console.log('✅ Found matching user:', user.email);
                 return user;
             }
