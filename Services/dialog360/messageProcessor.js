@@ -41,6 +41,13 @@ function parseToken(token) {
 
         const [, userHash, timestampBase36, randomStr] = parts;
         
+        console.log('🔍 PARSED TOKEN:', {
+            token: token,
+            userHash: userHash,
+            timestampBase36: timestampBase36,
+            randomStr: randomStr
+        });
+        
         // Convert base36 timestamp back to milliseconds
         const timestamp = parseInt(timestampBase36, 36);
         const tokenAge = Date.now() - timestamp;
@@ -68,6 +75,7 @@ function parseToken(token) {
  */
 async function findUserByHash(userHash) {
     try {
+        console.log('🔍 SEARCHING FOR USER HASH:', userHash);
         // Get all users and test hash generation locally
         const allUsersQuery = `SELECT id, email, name FROM users`;
         const allUsers = await pool.query(allUsersQuery);
@@ -78,8 +86,16 @@ async function findUserByHash(userHash) {
                 .replace(/[^a-zA-Z0-9]/g, '')
                 .substring(0, 8);
             
+            console.log('🔍 HASH COMPARISON:', {
+                searchingFor: userHash,
+                userEmail: user.email,
+                generatedHash: generatedHash,
+                match: generatedHash.toUpperCase() === userHash.toUpperCase()
+            });
+            
             // Compare in uppercase because token is converted to uppercase
             if (generatedHash.toUpperCase() === userHash.toUpperCase()) {
+                console.log('🔍 FOUND MATCHING USER:', user.email);
                 return user;
             }
         }
