@@ -617,9 +617,6 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       // Store token in database for persistence
       await storeTokenInDatabase(token, user.id, user.email, user.name);
       
-      // Update validation timestamp when token is validated via WhatsApp
-      await updateTokenValidationTimestamp(user.id);
-      
       await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את אנשי הקשר שלכם בפורמט:\nשם, טלפון, אימייל (אופציונלי)\n\n⏰ הטוקן פעיל למשך 10 דקות בלבד`);
       return { handled: true, result: { success: true, message: 'Token validated' } };
       
@@ -630,20 +627,6 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       const recentTokenData = await getRecentlyValidatedToken();
       
       if (!recentTokenData) {
-        // Check if there's an expired token (within last 10 minutes but now expired)
-        const expiredTokenData = await getExpiredTokenData();
-        
-        if (expiredTokenData) {
-          // Token was recently active but has now timed out
-          await sendWhatsAppReply(senderNumber, 
-            '⏰ זמן הטוקן פג!\n\n' +
-            'הטוקן שלכם פג תוקף לאחר 10 דקות.\n' +
-            'כל האנשי קשר שנשלחו עד כה נשמרו בהצלחה.\n\n' +
-            'כדי לשלוח אנשי קשר נוספים, אנא שלחו את הטוקן שוב כדי להתחיל תהליך חדש.'
-          );
-          return { handled: true, result: { success: false, message: 'Token timeout' } };
-        }
-        
         // No recently validated token, let it be processed as normal event response
         return { handled: false };
       }
@@ -735,22 +718,19 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
       await client.query(`
         ALTER TABLE users 
         ADD COLUMN IF NOT EXISTS whatsapp_token VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS whatsapp_token_expires_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS whatsapp_token_validated_at TIMESTAMP
+        ADD COLUMN IF NOT EXISTS whatsapp_token_expires_at TIMESTAMP
       `);
       
       // Update user with token
-      // Store token with 10-day expiry (token validity) and validation timestamp
+      // Store token with 10-day expiry
       await client.query(`
         UPDATE users 
         SET whatsapp_token = $1, 
-            whatsapp_token_expires_at = $2,
-            whatsapp_token_validated_at = $3
-        WHERE id = $4
+            whatsapp_token_expires_at = $2
+        WHERE id = $3
       `, [
         token,
         new Date(Date.now() + (TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)), // 10 days for token validity
-        new Date(), // Current time for validation timestamp
         userId
       ]);
       
@@ -764,73 +744,6 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
     }
   } catch (error) {
     console.error('Error storing token in users table:', error);
-  }
-}
-
-/**
- * Get expired token data (was active within last 10 minutes but now expired)
- * This helps provide better error messages for timeout cases
- */
-async function getExpiredTokenData() {
-  try {
-    const client = await pool.connect();
-    try {
-      // Find user with token that was active within last 10 minutes but is now expired
-      const tenMinutesAgo = new Date(Date.now() - (10 * 60 * 1000));
-      const now = new Date();
-      
-      const result = await client.query(`
-        SELECT id, email, name, whatsapp_token, whatsapp_token_expires_at
-        FROM users
-        WHERE whatsapp_token IS NOT NULL
-        AND whatsapp_token_expires_at > NOW()
-        AND whatsapp_token_validated_at > $1
-        AND whatsapp_token_validated_at < $2
-        ORDER BY whatsapp_token_validated_at DESC
-        LIMIT 1
-      `, [tenMinutesAgo, now]);
-      
-      if (result.rows.length > 0) {
-        const row = result.rows[0];
-        return {
-          token: row.whatsapp_token,
-          user: {
-            id: row.id,
-            email: row.email,
-            name: row.name
-          }
-        };
-      }
-      
-      return null;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Error getting expired token data:', error);
-    return null;
-  }
-}
-
-/**
- * Update token validation timestamp
- */
-async function updateTokenValidationTimestamp(userId) {
-  try {
-    const client = await pool.connect();
-    try {
-      await client.query(`
-        UPDATE users 
-        SET whatsapp_token_validated_at = NOW()
-        WHERE id = $1
-      `, [userId]);
-      
-      console.log(`✅ Token validation timestamp updated for user ${userId}`);
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Error updating token validation timestamp:', error);
   }
 }
 
@@ -850,10 +763,10 @@ async function getRecentlyValidatedToken() {
         FROM users
         WHERE whatsapp_token IS NOT NULL
         AND whatsapp_token_expires_at > NOW()
-        AND whatsapp_token_validated_at > $1
-        ORDER BY whatsapp_token_validated_at DESC
+        AND whatsapp_token IS NOT NULL
+        ORDER BY whatsapp_token_expires_at DESC
         LIMIT 1
-      `, [tenMinutesAgo]);
+      `);
       
       if (result.rows.length > 0) {
         const row = result.rows[0];
