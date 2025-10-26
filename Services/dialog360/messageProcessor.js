@@ -63,9 +63,13 @@ function parseToken(token) {
  */
 async function findUserByHash(userHash) {
     try {
+        console.log('🔍 Searching for user with hash:', userHash);
+        
         // Get all users and test hash generation locally
         const allUsersQuery = `SELECT id, email, name FROM users`;
         const allUsers = await pool.query(allUsersQuery);
+        
+        console.log('📊 Total users in database:', allUsers.rows.length);
         
         for (const user of allUsers.rows) {
             // Generate hash the same way as frontend
@@ -73,13 +77,18 @@ async function findUserByHash(userHash) {
                 .replace(/[^a-zA-Z0-9]/g, '')
                 .substring(0, 8);
             
+            console.log(`  Checking user: ${user.email} -> hash: ${generatedHash}`);
+            
             if (generatedHash === userHash) {
+                console.log('✅ Found matching user:', user.email);
                 return user;
             }
         }
+        
+        console.error('❌ No user found with hash:', userHash);
         return null;
     } catch (error) {
-        console.error('Error finding user by hash:', error);
+        console.error('❌ Error finding user by hash:', error);
         return null;
     }
 }
