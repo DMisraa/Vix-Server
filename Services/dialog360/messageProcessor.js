@@ -47,7 +47,6 @@ function parseToken(token) {
         const maxAge = TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 10 days in milliseconds
 
         if (tokenAge > maxAge) {
-            console.log(`Token expired: ${tokenAge}ms old (max: ${maxAge}ms)`);
             return null;
         }
 
@@ -69,13 +68,9 @@ function parseToken(token) {
  */
 async function findUserByHash(userHash) {
     try {
-        console.log('🔍 Searching for user with hash:', userHash);
-        
         // Get all users and test hash generation locally
         const allUsersQuery = `SELECT id, email, name FROM users`;
         const allUsers = await pool.query(allUsersQuery);
-        
-        console.log('📊 Total users in database:', allUsers.rows.length);
         
         for (const user of allUsers.rows) {
             // Generate hash the same way as frontend
@@ -83,16 +78,12 @@ async function findUserByHash(userHash) {
                 .replace(/[^a-zA-Z0-9]/g, '')
                 .substring(0, 8);
             
-            console.log(`  Checking user: ${user.email} -> hash: ${generatedHash}`);
-            
             // Compare in uppercase because token is converted to uppercase
             if (generatedHash.toUpperCase() === userHash.toUpperCase()) {
-                console.log('✅ Found matching user:', user.email);
                 return user;
             }
         }
         
-        console.error('❌ No user found with hash:', userHash);
         return null;
     } catch (error) {
         console.error('❌ Error finding user by hash:', error);
@@ -136,7 +127,6 @@ function parseContactData(messageText) {
  * Save contacts to database using guest upload system
  */
 async function saveContactsToDatabase(userId, contacts, userEmail) {
-    console.log('💾 saveContactsToDatabase called with:', { userId, userEmail, contactsCount: contacts.length });
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -148,7 +138,6 @@ async function saveContactsToDatabase(userId, contacts, userEmail) {
             VALUES ($1, $2, $3, $4) 
             RETURNING upload_id
         `;
-        console.log('📝 Inserting upload with invited_by_email:', userEmail);
         const uploadResult = await client.query(uploadQuery, [
             userEmail,
             'WhatsApp Contact Upload', // guest_name
@@ -166,7 +155,7 @@ async function saveContactsToDatabase(userId, contacts, userEmail) {
         `;
         
         for (const contact of contacts) {
-            console.log('📝 Inserting contact with invited_by:', userEmail, 'for contact:', contact.name);
+            console.log('🔍 EMAIL EXTRACTED FROM TOKEN AND INSERTED INTO invited_by COLUMN:', userEmail);
             await client.query(contactQuery, [
                 uploadId,
                 contact.name || '',
@@ -179,7 +168,6 @@ async function saveContactsToDatabase(userId, contacts, userEmail) {
         }
         
         await client.query('COMMIT');
-        console.log(`Saved ${contacts.length} WhatsApp contacts for user ${userId} (upload_id: ${uploadId})`);
         
         return { success: true, uploadId: uploadId };
     } catch (error) {
@@ -239,7 +227,6 @@ export async function processDialog360Message(message, value) {
       case 'contacts':
         // Handle contact cards (vCard format)
         const contacts = message.contacts || [];
-        console.log(`📇 Received ${contacts.length} contact card(s) from ${from}`);
         
         // Check if this is a WhatsApp contact upload
         const contactCardResult = await handleWhatsAppContactCards(contacts, from);
@@ -624,14 +611,11 @@ async function updateEventMessageResponse(phoneNumber, replyText, timestamp, pay
  */
 async function handleWhatsAppContactCards(contacts, senderNumber) {
   try {
-    console.log('📇 Processing contact cards from:', senderNumber);
-    
     // Check if there's an active token for this phone number
     const token = phoneToToken.get(senderNumber);
     
     if (!token) {
       // No active token for this phone number, let it be processed as normal event response
-      console.log('⚠️ No active token found for contact cards from:', senderNumber);
       return { handled: false };
     }
     
@@ -641,7 +625,6 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
     if (!activeUser) {
       // Token expired or invalid, clean up
       phoneToToken.delete(senderNumber);
-      console.log('⚠️ Token expired or invalid for phone:', senderNumber);
       await sendWhatsAppReply(senderNumber, '❌ הטוקן פג תוקף. אנא שלחו את הטוקן שוב כדי לשלוח אנשי קשר.');
       return { handled: true, result: { success: false, message: 'Token expired' } };
     }
@@ -658,7 +641,6 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
       // Validate that we have at least a name or phone
       if (contactData.name || contactData.phone) {
         parsedContacts.push(contactData);
-        console.log(`  📇 Parsed contact: ${contactData.name} - ${contactData.phone}`);
       }
     }
     
@@ -673,7 +655,6 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
     if (existingBuffer) {
       // Add to existing buffer
       existingBuffer.contacts.push(...parsedContacts);
-      console.log(`📊 Buffering ${parsedContacts.length} contacts. Total in buffer: ${existingBuffer.contacts.length}`);
       
       // Reset the timeout
       clearTimeout(existingBuffer.timeoutId);
@@ -694,8 +675,6 @@ async function handleWhatsAppContactCards(contacts, senderNumber) {
         contacts: parsedContacts,
         timeoutId: timeoutId
       });
-      
-      console.log(`📊 Started new buffer with ${parsedContacts.length} contacts`);
       
       await sendWhatsAppReply(senderNumber, `✅ מעולה! קיבלנו ${parsedContacts.length} אנשי קשר!\n\nאפשר להמשיך לשלוח עוד אנשי קשר או להשיב "סיימתי" אם סיימתם.`);
       return { handled: true, result: { success: true, contacts: parsedContacts } };
@@ -718,30 +697,24 @@ async function finalizeContactUpload(senderNumber) {
     const buffer = contactBuffers.get(senderNumber);
     
     if (!buffer) {
-      console.log('⚠️ No buffer found for:', senderNumber);
       return;
     }
     
     const { user, contacts } = buffer;
     
     if (contacts.length === 0) {
-      console.log('⚠️ No contacts to save for:', senderNumber);
       contactBuffers.delete(senderNumber);
       return;
     }
     
-    console.log(`💾 Finalizing contact upload for ${senderNumber}: ${contacts.length} contacts`);
-    
     // Save contacts to database (using guest upload system)
-    console.log('🔍 About to save contacts with user email:', user.email, 'for user ID:', user.id);
+    console.log('🔍 EMAIL EXTRACTED FROM TOKEN FOR invited_by COLUMN:', user.email);
     const result = await saveContactsToDatabase(user.id, contacts, user.email);
     
     if (result.success) {
       await sendWhatsAppReply(senderNumber, `✅ נשמרו ${contacts.length} אנשי קשר בהצלחה!\n\nהאנשי קשר יופיעו בהתראות של בעל הטוקן לבדיקה ואישור.`);
-      console.log(`✅ Saved ${contacts.length} contacts for user ${user.email}`);
     } else {
       await sendWhatsAppReply(senderNumber, '❌ שגיאה בשמירת אנשי הקשר. אנא נסה שוב.');
-      console.error('❌ Failed to save contacts:', result.error);
     }
     
     // Clear the buffer and phone-to-token mapping
@@ -773,7 +746,6 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
     if (tokenMatch) {
       // Phase 1: Token validation
       const token = tokenMatch[0];
-      console.log('WhatsApp Contact Upload - Token found:', token);
       const tokenData = parseToken(token);
       
       if (!tokenData || !tokenData.isValid) {
@@ -798,8 +770,6 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       // Track which phone number is using this token
       phoneToToken.set(senderNumber, token);
       
-      console.log('✅ Token validated and stored:', token, 'for user:', user.email, 'from phone:', senderNumber);
-      
       await sendWhatsAppReply(senderNumber, `✅ הטוקן אומת בהצלחה!\n\nשלחו כעת את כרטיסי אנשי הקשר שלכם - פשוט לחצו על כפתור השיתוף של אנשי הקשר בתפריט ולחצו על כל אנשי הקשר שתרצו לשלוח.\n\n⏰ הטוקן פעיל למשך 10 דקות בלבד`);
       return { handled: true, result: { success: true, message: 'Token validated' } };
       
@@ -807,8 +777,6 @@ async function handleWhatsAppContactUpload(messageText, senderNumber) {
       // Check if user is trying to finalize contact upload
       const trimmedText = messageText.trim().toLowerCase();
       if (trimmedText === 'סיימתי' || trimmedText === 'סיימתי!' || trimmedText === 'סיימתי?') {
-        console.log('📥 User requested to finalize contact upload');
-        
         // Check if there's an active buffer for this sender
         const buffer = contactBuffers.get(senderNumber);
         
@@ -887,9 +855,6 @@ async function sendWhatsAppReply(phoneNumber, message) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ WhatsApp reply failed (${response.status}): ${errorText}`);
-    } else {
-      const successData = await response.json();
-      console.log(`✅ WhatsApp reply sent: ${successData.messages?.[0]?.id || 'no-id'}`);
     }
   } catch (error) {
     console.error('❌ WhatsApp reply error:', error.message);
@@ -904,8 +869,6 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      
-      console.log('💾 Storing token for user ID:', userId, 'Email:', userEmail);
       
       // Add columns to users table if they don't exist
       await client.query(`
@@ -927,10 +890,7 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
         userId
       ]);
       
-      console.log('📊 Update result - rows affected:', result.rowCount);
-      
       await client.query('COMMIT');
-      console.log(`✅ Token stored in users table: ${token} for user: ${userEmail}`);
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('❌ Error in transaction:', error);
@@ -951,19 +911,17 @@ function getUserFromValidatedToken(token) {
   const tokenData = activeTokens.get(token);
   
   if (!tokenData) {
-    console.log('⚠️ Token not found in active tokens:', token);
     return null;
   }
   
   // Check if token is still valid (within 10 minutes)
   const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
   if (tokenData.validatedAt < tenMinutesAgo) {
-    console.log('⚠️ Token expired:', token);
     activeTokens.delete(token);
     return null;
   }
   
-  console.log('✅ Found valid token for user:', tokenData.user.email);
+  console.log('🔍 EMAIL RETRIEVED FROM TOKEN FOR invited_by:', tokenData.user.email);
   return tokenData.user;
 }
 
@@ -972,8 +930,6 @@ function getUserFromValidatedToken(token) {
  */
 async function generateAndStoreToken(userEmail, userName) {
   try {
-    console.log('📝 Generating token for email:', userEmail);
-    
     // Generate token the same way as frontend
     const timestamp = Date.now().toString(36);
     const randomStr = Math.random().toString(36).substring(2, 8);
@@ -981,8 +937,6 @@ async function generateAndStoreToken(userEmail, userName) {
       .replace(/[^a-zA-Z0-9]/g, '')
       .substring(0, 8);
     const token = `VIX_${userHash}_${timestamp}_${randomStr}`.toUpperCase();
-    
-    console.log('🔍 Searching for user with email:', userEmail);
     
     // Find user in database by email directly (more reliable than hash)
     const client = await pool.connect();
@@ -993,16 +947,13 @@ async function generateAndStoreToken(userEmail, userName) {
       );
       
       if (userResult.rows.length === 0) {
-        console.error('❌ User not found for email:', userEmail);
         throw new Error('User not found');
       }
       
       const user = userResult.rows[0];
-      console.log('✅ Found user:', user.email, 'ID:', user.id);
       
       // Store token in database
       await storeTokenInDatabase(token, user.id, userEmail, userName);
-      console.log('💾 Token stored in database for user:', user.email);
     } finally {
       client.release();
     }
