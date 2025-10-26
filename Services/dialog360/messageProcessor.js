@@ -714,6 +714,8 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
     try {
       await client.query('BEGIN');
       
+      console.log('💾 Storing token for user ID:', userId, 'Email:', userEmail);
+      
       // Add columns to users table if they don't exist
       await client.query(`
         ALTER TABLE users 
@@ -723,7 +725,7 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
       
       // Update user with token
       // Store token with 10-day expiry
-      await client.query(`
+      const result = await client.query(`
         UPDATE users 
         SET whatsapp_token = $1, 
             whatsapp_token_expires_at = $2
@@ -734,16 +736,19 @@ async function storeTokenInDatabase(token, userId, userEmail, userName) {
         userId
       ]);
       
+      console.log('📊 Update result - rows affected:', result.rowCount);
+      
       await client.query('COMMIT');
-      console.log(`✅ Token stored in users table: ${token}`);
+      console.log(`✅ Token stored in users table: ${token} for user: ${userEmail}`);
     } catch (error) {
       await client.query('ROLLBACK');
+      console.error('❌ Error in transaction:', error);
       throw error;
     } finally {
       client.release();
     }
   } catch (error) {
-    console.error('Error storing token in users table:', error);
+    console.error('❌ Error storing token in users table:', error);
   }
 }
 
@@ -796,6 +801,8 @@ async function getRecentlyValidatedToken() {
  */
 async function generateAndStoreToken(userEmail, userName) {
   try {
+    console.log('📝 Generating token for email:', userEmail);
+    
     // Generate token the same way as frontend
     const timestamp = Date.now().toString(36);
     const randomStr = Math.random().toString(36).substring(2, 8);
@@ -804,18 +811,34 @@ async function generateAndStoreToken(userEmail, userName) {
       .substring(0, 8);
     const token = `VIX_${userHash}_${timestamp}_${randomStr}`.toUpperCase();
     
-    // Find user in database
-    const user = await findUserByHash(userHash);
-    if (!user) {
-      throw new Error('User not found');
-    }
+    console.log('🔍 Searching for user with email:', userEmail);
     
-    // Store token in database
-    await storeTokenInDatabase(token, user.id, userEmail, userName);
+    // Find user in database by email directly (more reliable than hash)
+    const client = await pool.connect();
+    try {
+      const userResult = await client.query(
+        `SELECT id, email, name FROM users WHERE email = $1`,
+        [userEmail]
+      );
+      
+      if (userResult.rows.length === 0) {
+        console.error('❌ User not found for email:', userEmail);
+        throw new Error('User not found');
+      }
+      
+      const user = userResult.rows[0];
+      console.log('✅ Found user:', user.email, 'ID:', user.id);
+      
+      // Store token in database
+      await storeTokenInDatabase(token, user.id, userEmail, userName);
+      console.log('💾 Token stored in database for user:', user.email);
+    } finally {
+      client.release();
+    }
     
     return token;
   } catch (error) {
-    console.error('Error generating and storing token:', error);
+    console.error('❌ Error generating and storing token:', error);
     throw error;
   }
 }

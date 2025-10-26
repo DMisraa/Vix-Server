@@ -215,12 +215,14 @@ app.get('/api/whatsapp/token-status/:userEmail', async (req, res) => {
 app.post('/api/whatsapp/generate-token', async (req, res) => {
   try {
     const { userEmail, userName } = req.body;
+    console.log('🔑 Generate token request - Email:', userEmail, 'Name:', userName);
     const { generateAndStoreToken } = await import('./Services/dialog360/messageProcessor.js');
     const token = await generateAndStoreToken(userEmail, userName);
+    console.log('✅ Token generated successfully for:', userEmail);
     
     res.json({ success: true, token });
   } catch (error) {
-    console.error('Token generation error:', error);
+    console.error('❌ Token generation error:', error);
     res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -268,6 +270,5 @@ cron.schedule('0 10 * * *', async () => {
   scheduled: true,
   timezone: "Asia/Jerusalem" // Israeli timezone
 });
-
 
 app.listen(port, () => console.log(`Server running on port ${port}`));
