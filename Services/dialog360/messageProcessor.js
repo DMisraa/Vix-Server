@@ -41,13 +41,6 @@ function parseToken(token) {
 
         const [, userHash, timestampBase36, randomStr] = parts;
         
-        console.log('🔍 PARSED TOKEN:', {
-            token: token,
-            userHash: userHash,
-            timestampBase36: timestampBase36,
-            randomStr: randomStr
-        });
-        
         // Convert base36 timestamp back to milliseconds
         const timestamp = parseInt(timestampBase36, 36);
         const tokenAge = Date.now() - timestamp;
@@ -75,29 +68,38 @@ function parseToken(token) {
  */
 async function findUserByHash(userHash) {
     try {
-        console.log('🔍 SEARCHING FOR USER HASH:', userHash);
-        // Get all users and test hash generation locally
+        // First try: Get all users and test hash generation locally
         const allUsersQuery = `SELECT id, email, name FROM users`;
         const allUsers = await pool.query(allUsersQuery);
         
         for (const user of allUsers.rows) {
-            // Generate hash the same way as frontend
+            // Generate hash the same way as frontend (full hash, no truncation)
             const generatedHash = Buffer.from(user.email).toString('base64')
-                .replace(/[^a-zA-Z0-9]/g, '')
-                .substring(0, 8);
-            
-            console.log('🔍 HASH COMPARISON:', {
-                searchingFor: userHash,
-                userEmail: user.email,
-                generatedHash: generatedHash,
-                match: generatedHash.toUpperCase() === userHash.toUpperCase()
-            });
+                .replace(/[^a-zA-Z0-9]/g, '');
             
             // Compare in uppercase because token is converted to uppercase
             if (generatedHash.toUpperCase() === userHash.toUpperCase()) {
-                console.log('🔍 FOUND MATCHING USER:', user.email);
+                console.log('🔍 USER FOUND BY HASH:', user.email);
                 return user;
             }
+        }
+        
+        // Fallback: If no hash match, try to decode the hash back to email
+        // This is a safety net for edge cases
+        try {
+            const decodedEmail = Buffer.from(userHash, 'base64').toString('utf-8');
+            console.log('🔍 FALLBACK: Trying to decode hash to email:', decodedEmail);
+            
+            // Verify this email exists in database
+            const fallbackQuery = `SELECT id, email, name FROM users WHERE email = $1`;
+            const fallbackResult = await pool.query(fallbackQuery, [decodedEmail]);
+            
+            if (fallbackResult.rows.length > 0) {
+                console.log('🔍 USER FOUND BY FALLBACK DECODE:', fallbackResult.rows[0].email);
+                return fallbackResult.rows[0];
+            }
+        } catch (decodeError) {
+            console.log('🔍 FALLBACK DECODE FAILED:', decodeError.message);
         }
         
         return null;
@@ -950,8 +952,7 @@ async function generateAndStoreToken(userEmail, userName) {
     const timestamp = Date.now().toString(36);
     const randomStr = Math.random().toString(36).substring(2, 8);
     const userHash = Buffer.from(userEmail).toString('base64')
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .substring(0, 8);
+      .replace(/[^a-zA-Z0-9]/g, '');
     const token = `VIX_${userHash}_${timestamp}_${randomStr}`.toUpperCase();
     
     console.log('🔍 EMAIL INSERTED INTO TOKEN:', userEmail, '-> Token:', token);
