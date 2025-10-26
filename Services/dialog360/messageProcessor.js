@@ -938,6 +938,8 @@ async function generateAndStoreToken(userEmail, userName) {
       .substring(0, 8);
     const token = `VIX_${userHash}_${timestamp}_${randomStr}`.toUpperCase();
     
+    console.log('🔍 EMAIL INSERTED INTO TOKEN:', userEmail, '-> Token:', token);
+    
     // Find user in database by email directly (more reliable than hash)
     const client = await pool.connect();
     try {
