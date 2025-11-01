@@ -26,7 +26,10 @@ export async function verifyEmail(req, res) {
     let responseData = {
       success: true,
       message: 'Email verified successfully',
-      user: result.user
+      user: {
+        ...result.user,
+        email_verified: true
+      }
     };
 
     if (isIOS) {

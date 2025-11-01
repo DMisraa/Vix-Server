@@ -23,7 +23,13 @@ export function verifyJwt(req, res) {
   
   try {
     const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-    res.json({ user: decoded });
+    // Ensure email_verified is included in response (defaults to true for backward compatibility)
+    res.json({ 
+      user: {
+        ...decoded,
+        email_verified: decoded.email_verified !== undefined ? decoded.email_verified : true
+      }
+    });
   } catch (error) {
     console.error('Token verification failed:', error);
     

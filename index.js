@@ -24,6 +24,7 @@ import { deleteContact } from "./Services/database/deleteContact.js";
 import { deleteEventContact } from "./Services/database/deleteEventContact.js";
 import { updateContact } from "./Services/database/updateContact.js";
 import { updateEvent } from "./Services/database/updateEvent.js";
+import { enableAutoInvite } from "./Services/database/enableAutoInvite.js";
 import { moveContactsEndpoint } from "./Services/database/moveContactsBetweenEvents.js";
 import { uploadGuestContacts } from "./Services/database/uploadGuestContacts.js";
 import { deleteGuestUpload } from "./Services/database/deleteGuestUpload.js";
@@ -34,6 +35,7 @@ import { handleContactForm } from "./Services/contactForm.js";
 import { handleDialog360Webhook } from "./Services/dialog360/webhook.js";
 import { handleSendTemplate } from "./Services/dialog360SendTemplate.js";
 import { processFollowupInvitations, triggerFollowupInvitations } from "./Services/followupInvitations.js";
+import { processAutoInvitations, triggerAutoInvitations } from "./Services/autoInvitations.js";
 
 // Import extracted endpoint functions
 import { verifyJwt } from "./Services/auth/verifyJwt.js";
@@ -176,6 +178,8 @@ app.post('/api/create-event', createEvent)
 
 app.put('/api/update-event', updateEvent);
 
+app.post('/api/auto-invite/enable', enableAutoInvite);
+
 app.post('/event-contacts', addContactToEvent);
 
 app.post('/api/move-contacts', moveContactsEndpoint);
@@ -256,6 +260,9 @@ app.post('/api/dialog360/send-template', handleSendTemplate);
 // Followup invitations endpoint (for manual testing)
 app.post('/api/followup-invitations/trigger', triggerFollowupInvitations);
 
+// Auto-invite endpoint (for manual testing)
+app.post('/api/auto-invite/trigger', triggerAutoInvitations);
+
 // Setup cron job for followup invitations
 // Runs daily at 10:00 AM to send followup invitations
 cron.schedule('0 10 * * *', async () => {
@@ -265,6 +272,21 @@ cron.schedule('0 10 * * *', async () => {
     console.log('✅ Cron job completed:', result);
   } catch (error) {
     console.error('❌ Cron job failed:', error);
+  }
+}, {
+  scheduled: true,
+  timezone: "Asia/Jerusalem" // Israeli timezone
+});
+
+// Setup cron job for auto-invitations
+// Runs daily at 10:00 AM to process auto-invite events
+cron.schedule('0 10 * * *', async () => {
+  console.log('🕙 Cron job triggered: Processing auto-invitations...');
+  try {
+    const result = await processAutoInvitations();
+    console.log('✅ Auto-invite cron job completed:', result);
+  } catch (error) {
+    console.error('❌ Auto-invite cron job failed:', error);
   }
 }, {
   scheduled: true,

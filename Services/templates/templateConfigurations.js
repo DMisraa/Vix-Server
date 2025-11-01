@@ -285,15 +285,11 @@ function configureThankYouNote(event, contact) {
 export function getTemplateConfiguration(templateName, event, contact) {
   const configurations = {
     'event_invitation': configureFirstEventInvitation,
-    'first_event_invitation': configureFirstEventInvitation, // Backward compatibility - old name
     'reminder_1': configureReminder1, // First reminder
     'reminder_2': configureReminder2, // Second reminder
-    'reminder_3': configureReminder3, // Third reminder
+    'reminder_3': configureReminder3, // Third reminder (and any additional rounds)
     'invitation_followup': configureInvitationFollowup,
-    'second_reminder': configureSecondReminder,
     'thank_you_note': configureThankYouNote,
-    'first_reminderr': configureSecondReminder, // Reuse same config
-    'first_second_reminder': configureSecondReminder, // Reuse same config
     'event_directions': configureSecondReminder, // TODO: Create specific config
     'thank_you_note_2': configureThankYouNote, // Reuse same config
   };
@@ -320,7 +316,7 @@ export function getTemplateConfiguration(templateName, event, contact) {
 export function templateRequiresImage(templateName) {
   const templatesWithImages = [
     'event_invitation',
-    'first_event_invitation', // Backward compatibility
+    'invitation_followup',
     'reminder_1',
     'reminder_2', 
     'reminder_3',
@@ -328,19 +324,4 @@ export function templateRequiresImage(templateName) {
   ];
   
   return templatesWithImages.includes(templateName);
-}
-
-/**
- * Get all available template names
- */
-export function getAvailableTemplates() {
-  return [
-    { name: 'event_invitation', description: 'הזמנה ראשונה לאירוע', hasImage: true },
-    { name: 'invitation_followup', description: 'הזמנת מעקב', hasImage: false },
-    { name: 'second_reminder', description: 'תזכורת שנייה', hasImage: false },
-    { name: 'first_reminderr', description: 'תזכורת ראשונה', hasImage: false },
-    { name: 'thank_you_note', description: 'הודעת תודה', hasImage: false },
-    { name: 'thank_you_note_2', description: 'הודעת תודה 2', hasImage: false },
-    { name: 'event_directions', description: 'הוראות הגעה', hasImage: true },
-  ];
 }

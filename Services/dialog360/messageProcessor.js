@@ -158,7 +158,7 @@ async function saveContactsToDatabase(userId, contacts, userEmail, senderPhone =
         `;
         const uploadResult = await client.query(uploadQuery, [
             userEmail,
-            `משתמש WhatsApp (${senderPhone})`, // guest_name in Hebrew with phone
+            'משתמש WhatsApp', // guest_name in Hebrew
             'אנשי קשר נשלחו דרך WhatsApp', // guest_notes in Hebrew
             'whatsapp_upload', // token identifier
             senderPhone // sender phone number

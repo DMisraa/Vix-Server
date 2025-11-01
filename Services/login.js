@@ -30,28 +30,30 @@ export async function login(req, res) {
       return res.status(401).json({ error: "אימייל או סיסמה שגויים." });
     }
 
-    // Check if email is verified (only for manual signup, not Google)
-    if (user.email_verified === false) {
-      client.release();
-      return res.status(403).json({ 
-        error: "אנא אמתו את האימייל שלכם לפני ההתחברות. בדקו את תיבת הדואר הנכנס.",
-        requiresVerification: true 
-      });
-    }
-
     // Detect iOS device
     const userAgent = req.get('User-Agent') || '';
     const isIOS = /iPad|iPhone|iPod/.test(userAgent);
 
+    // Include email_verified status in response and JWT
+    const emailVerified = user.email_verified === true;
+
     let responseData = { 
       message: "Login successful.",
-      user: { name: user.name, email: user.email }
+      user: { 
+        name: user.name, 
+        email: user.email,
+        email_verified: emailVerified
+      }
     };
 
     if (isIOS) {
-      // iOS: Use 7-day JWT token with smart extension
+      // iOS: Use 7-day JWT token with email_verified status
       const jwtToken = jwt.sign(
-        { name: user.name, email: user.email },
+        { 
+          name: user.name, 
+          email: user.email,
+          email_verified: emailVerified
+        },
         process.env.JWT_SECRET,
         { expiresIn: "7d" } // 7 days
       );
@@ -60,9 +62,13 @@ export async function login(req, res) {
       responseData.accessToken = jwtToken;
       
     } else {
-      // Desktop/Android: Now also use 7-day JWT token (simplified approach)
+      // Desktop/Android: Now also use 7-day JWT token with email_verified status
       const jwtToken = jwt.sign(
-        { name: user.name, email: user.email },
+        { 
+          name: user.name, 
+          email: user.email,
+          email_verified: emailVerified
+        },
         process.env.JWT_SECRET,
         { expiresIn: "7d" } // 7 days
       );

@@ -1,6 +1,7 @@
 import pool from '../db/db.js';
 import { sendTemplateMessage } from './dialog360SendTemplate.js';
 import { getTemplateConfiguration } from './templates/templateConfigurations.js';
+import { TEMPLATE_NAMES } from './templates/templateNames.js';
 import { normalizePhoneForDialog360 } from './utils/phoneNormalization.js';
 
 /**
@@ -123,15 +124,15 @@ async function sendFollowupInvitation(contactData) {
     };
 
     // Get template configuration for followup invitation
-    // Using 'invitation_followup' template for followup invitations
-    const templateConfig = getTemplateConfiguration('invitation_followup', event, contact);
+    // Using 'invitation_followup' template for followup invitations (for "maybe" responses)
+    const templateConfig = getTemplateConfiguration(TEMPLATE_NAMES.FOLLOWUP, event, contact);
 
     console.log(`📱 Sending followup invitation to ${contact_name} (${normalizedPhone}) for event: ${event_name}`);
 
     // Send WhatsApp template message
     const result = await sendTemplateMessage({
       phoneNumber: normalizedPhone,
-      templateName: 'invitation_followup', // Use followup template
+      templateName: TEMPLATE_NAMES.FOLLOWUP, // Use followup template for "maybe" responses
       languageCode: 'he',
       templateData: templateConfig,
       imageUrl: image_url, // Include event image if available
