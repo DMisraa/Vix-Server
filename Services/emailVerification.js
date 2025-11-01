@@ -27,16 +27,23 @@ export async function sendVerificationEmail(email, fullName) {
     console.log('  - Using Zoho SMTP:', useZoho);
     console.log('  - Zoho email:', process.env.ZOHO_EMAIL || 'NOT SET');
     
+    // Try port 465 (SSL) first, fallback to 587 (TLS) if that fails
     const transporter = nodemailer.createTransport(
       useZoho
         ? {
             host: 'smtp.zoho.com',
-            port: 587,
-            secure: false,
+            port: 465, // Use SSL port 465 (more reliable, less likely to be blocked)
+            secure: true, // SSL/TLS for port 465
             auth: {
               user: process.env.ZOHO_EMAIL,
               pass: process.env.ZOHO_PASSWORD,
             },
+            connectionTimeout: 20000, // 20 seconds for SSL handshake
+            greetingTimeout: 20000,
+            socketTimeout: 20000,
+            tls: {
+              rejectUnauthorized: false // Some Railway networks need this
+            }
           }
         : {
             service: 'gmail',
