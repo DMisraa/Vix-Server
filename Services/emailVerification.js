@@ -19,8 +19,16 @@ export async function sendVerificationEmail(email, fullName) {
 
     // Create transporter (using Zoho SMTP for production reliability)
     // Fallback to Gmail if Zoho credentials are not available (for development)
+    const useZoho = !!(process.env.ZOHO_EMAIL && process.env.ZOHO_PASSWORD);
+    
+    console.log('📧 Email verification SMTP config check:');
+    console.log('  - ZOHO_EMAIL exists:', !!process.env.ZOHO_EMAIL);
+    console.log('  - ZOHO_PASSWORD exists:', !!process.env.ZOHO_PASSWORD);
+    console.log('  - Using Zoho SMTP:', useZoho);
+    console.log('  - Zoho email:', process.env.ZOHO_EMAIL || 'NOT SET');
+    
     const transporter = nodemailer.createTransport(
-      process.env.ZOHO_EMAIL && process.env.ZOHO_PASSWORD
+      useZoho
         ? {
             host: 'smtp.zoho.com',
             port: 587,
@@ -103,12 +111,19 @@ export async function sendVerificationEmail(email, fullName) {
 
     // Send email
     const fromEmail = process.env.ZOHO_EMAIL || process.env.VIX_EMAIL;
+    console.log(`📧 Attempting to send verification email:`);
+    console.log(`  - From: ${fromEmail}`);
+    console.log(`  - To: ${email}`);
+    console.log(`  - Using service: ${useZoho ? 'Zoho SMTP' : 'Gmail SMTP'}`);
+    
     await transporter.sendMail({
       from: `"Vix Team" <${fromEmail}>`,
       to: email,
       subject: 'אמתו את האימייל שלכם - Vix',
       html,
     });
+    
+    console.log(`✅ Verification email sent successfully using ${useZoho ? 'Zoho' : 'Gmail'}`);
 
     return { success: true, verificationToken };
   } catch (error) {
