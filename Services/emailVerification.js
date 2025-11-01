@@ -37,9 +37,6 @@ export async function sendVerificationEmail(email, fullName) {
               user: process.env.ZOHO_EMAIL,
               pass: process.env.ZOHO_PASSWORD,
             },
-            connectionTimeout: 10000, // 10 seconds
-            greetingTimeout: 10000,
-            socketTimeout: 10000,
           }
         : {
             service: 'gmail',
